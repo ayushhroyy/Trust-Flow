@@ -1389,3 +1389,82 @@ body {
     margin-top: 12px;
     border: 1px solid #333;
 }
+
+/* Dashboard Filters */
+.dashboard-filters {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 20px 0;
+}
+
+.search-box {
+    flex: 1;
+    position: relative;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.search-box:focus-within {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(99, 102, 241, 0.5);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+}
+
+.search-icon {
+    font-size: 14px;
+    margin-right: 12px;
+    opacity: 0.5;
+}
+
+#historySearch {
+    background: none;
+    border: none;
+    color: #fff;
+    padding: 12px 0;
+    width: 100%;
+    font-size: 14px;
+    outline: none;
+}
+
+.filter-group {
+    display: flex;
+    gap: 12px;
+}
+
+.glass-select {
+    background: rgba(25, 25, 25, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: #fff;
+    padding: 8px 16px;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.glass-select:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(35, 35, 35, 0.8);
+}
+
+.glass-select:focus {
+    border-color: #6366f1;
+}
+
+@media (max-width: 640px) {
+    .dashboard-filters {
+        flex-direction: column;
+    }
+
+    .filter-group {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+}

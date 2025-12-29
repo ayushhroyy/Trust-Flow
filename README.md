@@ -1,88 +1,49 @@
-# TrustFlow
+# Securify
 
-A secure identity verification system using face recognition and Aadhar/phone number authentication.
+A robust identity verification system leveraging Cloudflare Workers, D1 Database, R2 Storage, and face-api.js for real-time face recognition.
 
-## Features
+## 🚀 Live Demo
+The application is deployed on Cloudflare Pages.
 
-- **Identity Verification**: Verify users using Aadhar number or phone number
-- **Face Recognition**: Real-time face matching using face-api.js
-- **Database Management**: Add new users to the verification database
-- **Simple UI**: Clean, modern interface with glassmorphism design
+## ✨ Key Features
 
-## How It Works
+- **Multi-Factor Verification**: Verify identities using Aadhar numbers or Phone numbers combined with real-time biometric face matching.
+- **Biometric Face Recognition**: Uses `face-api.js` (SSD MobileNet V1) for high-accuracy face detection and 128-dimensional face descriptors.
+- **Aadhar OCR Scanner**: Integrated Google Gemini 2.5 Flash Lite (via OpenRouter) to automatically extract 12-digit Aadhar numbers from uploaded images.
+- **Biometric Admin Access**: The "Manage Database" section is secured by both Aadhar authorization and 3-consecutive-match face verification for administrators.
+- **Analytics Dashboard**: Real-time insights into verification success rates, recent activity logs, and confidence scores.
+- **Advanced Data Management**: Comprehensive interface for adding/deleting users with support for webcam photo capture and Aadhar scanning.
 
-1. **Verification Flow**:
-   - Enter Aadhar (12 digits) or Phone (10 digits)
-   - System loads reference image from database
-   - Face matching via webcam
-   - Success/failure notification
+## 🛠 Tech Stack
 
-2. **Database Structure**:
-   - Each user has a folder in `userdata/` named by their Aadhar number
-   - Each folder contains:
-     - `details.json`: User information
-     - `img.jpeg`: Reference photo for face matching
+- **Frontend**: Vanilla JavaScript, HTML5, CSS3 (Glassmorphism UI)
+- **Face Recognition**: [face-api.js](https://github.com/justadudewhohacks/face-api.js/)
+- **OCR AI**: Google Gemini 2.5 Flash Lite (via OpenRouter API)
+- **Backend Architecture**: Cloudflare Workers (Edge Computing)
+- **Database**: Cloudflare D1 (Serverless SQL)
+- **Object Storage**: Cloudflare R2 (Storing Reference Photos)
+- **deployment**: Cloudflare Pages
 
-## Adding Users
+## 📐 Architecture
 
-### Manual Method (Recommended)
+1. **Identity Request**: User provides Aadhar/Phone.
+2. **Reference Fetch**: Worker fetches metadata from D1 and signed image URL from R2.
+3. **Face Matching**: Client-side face-api.js performs matching against the reference.
+4. **Logging**: Verification results and confidence scores are persisted back to D1 for analytics.
 
-1. Create a folder in `userdata/` with Aadhar number as name:
-   ```
-   userdata/123456789012/
-   ```
+## 🔒 Security
 
-2. Add user details in `details.json`:
-   ```json
-   {
-     "id": 1,
-     "name": "John Doe",
-     "username": "john_doe",
-     "aadhar_id": "123456789012",
-     "phone_number": "9876543210"
-   }
-   ```
+- **Restricted Admin**: Only specific Aadhar numbers can initiate admin login.
+- **Liveness Check**: Requires 5 consecutive matched frames for user verification (3 for admin).
+- **Masked Data**: PII (Aadhar/Phone) is masked in logs and dashboard views.
+- **Secrets Management**: API keys (OpenRouter/Gemini) are stored as Cloudflare Worker Secrets.
 
-3. Add photo as `img.jpeg` in the same folder
+## 📦 Local Development
 
-### Via Admin Interface
+1. **Install Wrangler**: `npm install -g wrangler`
+2. **Login**: `wrangler login`
+3. **Deploy Worker**: `cd trustflow-worker && wrangler deploy` (Use existing D1/R2 bindings in `wrangler.toml`)
+4. **Run Frontend**: Use any local server (e.g., `python3 -m http.server 8080`)
 
-1. Click "Manage Database" on homepage
-2. Fill in user details (name, Aadhar, phone)
-3. Upload a photo
-4. Click "Add to Database"
-
-**Note**: The admin interface shows instructions for manual file creation since this is a static application.
-
-## File Storage Approach
-
-**Current**: Filesystem (files in `userdata/` folder with JSON metadata)
-- Pros: Simple, no database needed, works great for demos
-- Cons: Limited scalability
-
-**For Production** (future):
-- Cloud Storage (AWS S3, Firebase, etc.)
-- Database (PostgreSQL, MongoDB, etc.)
-- Backend API for CRUD operations
-
-## Setup
-
-1. Open `index.html` in a web browser
-2. Ensure camera permissions are granted
-3. That's it! No server needed for demo
-
-## Tech Stack
-
-- **Frontend**: HTML, CSS, JavaScript
-- **Face Recognition**: face-api.js
-- **Design**: Glassmorphism UI
-- **Storage**: Filesystem with JSON metadata
-
-## Security Notes
-
-- This is a demo/prototype
-- For production, implement:
-  - Server-side validation
-  - Encrypted storage
-  - Rate limiting
-  - Authentication for admin panel
+## 📄 License
+This project is for demonstration purposes. All biometric data should be handled according to local data protection regulations.

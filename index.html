@@ -354,11 +354,34 @@
                     </div>
                 </div>
 
+                <!-- Dashboard Filters -->
+                <div class="dashboard-filters">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="historySearch" placeholder="Search by name or Aadhar..."
+                            oninput="filterDashboard()">
+                    </div>
+                    <div class="filter-group">
+                        <select id="statusFilter" class="glass-select" onchange="filterDashboard()">
+                            <option value="all">All Status</option>
+                            <option value="success">Success</option>
+                            <option value="failed">Failed</option>
+                        </select>
+                        <select id="timeFilter" class="glass-select" onchange="filterDashboard()">
+                            <option value="all">All Time</option>
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                        </select>
+                    </div>
+                </div>
+
                 <!-- History Section -->
                 <div class="history-section">
                     <div class="section-header">
                         <h3 class="section-title">📜 Recent Activity</h3>
-                        <span class="history-count" id="historyCount">0 records</span>
+                        <div class="section-actions">
+                            <span class="history-count" id="historyCount">0 records</span>
+                        </div>
                     </div>
 
                     <div class="history-list" id="historyTableBody">

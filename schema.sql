@@ -1,4 +1,4 @@
--- TrustFlow D1 Database Schema
+-- Securify D1 Database Schema
 
 -- Users table for storing user details
 CREATE TABLE IF NOT EXISTS users (

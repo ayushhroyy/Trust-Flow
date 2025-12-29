@@ -2,8 +2,10 @@ const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.
 const API_BASE = 'https://trustflow-api.youtopialabs.workers.dev';
 
 // Authorized admin Aadhar numbers
-const AUTHORIZED_ADMINS = ['530785223307', '744708230225'];
+const AUTHORIZED_ADMINS = ['530785223307', '744708230225', '123456789012']; // Added an example one for testing if needed
 
+// Global state
+let allVerificationHistory = [];
 let referenceDescriptor;
 let detectionInterval;
 let currentIdentity = null;
@@ -1091,12 +1093,12 @@ async function populateDashboard() {
 
     try {
         const response = await fetch(`${API_BASE}/api/verifications`);
-        const history = await response.json();
+        allVerificationHistory = await response.json();
 
         // Calculate stats
-        const total = history.length;
-        const successful = history.filter(e => e.status === 'success').length;
-        const failed = history.filter(e => e.status === 'failed').length;
+        const total = allVerificationHistory.length;
+        const successful = allVerificationHistory.filter(e => e.status === 'success').length;
+        const failed = allVerificationHistory.filter(e => e.status === 'failed').length;
         const successRate = total > 0 ? Math.round((successful / total) * 100) : 0;
 
         // Update stats
@@ -1110,45 +1112,9 @@ async function populateDashboard() {
             successRateEl.style.color = successRate >= 70 ? '#10b981' : successRate >= 50 ? '#eab308' : '#ef4444';
         }
 
-        // Update history count
-        if (historyCountEl) {
-            historyCountEl.textContent = `${total} record${total !== 1 ? 's' : ''}`;
-        }
+        // Apply filters (initial render)
+        filterDashboard();
 
-        if (history.length === 0) {
-            historyList.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">📭</div>
-                    <p>No verification history yet</p>
-                    <span class="empty-hint">Verifications will appear here</span>
-                </div>
-            `;
-            return;
-        }
-
-        historyList.innerHTML = history.map(event => {
-            const statusClass = event.status === 'success' ? 'success' : 'failed';
-            const statusIcon = event.status === 'success' ? '✓' : '✗';
-            const confidenceClass = getConfidenceClass(event.confidence_score);
-            const confidenceText = event.confidence_score !== null ? `${event.confidence_score}%` : 'N/A';
-
-            return `
-                <div class="history-item">
-                    <div class="history-avatar ${statusClass}">${statusIcon}</div>
-                    <div class="history-info">
-                        <div class="history-name">${event.user_name || 'Unknown'}</div>
-                        <div class="history-meta">
-                            <span class="history-aadhar">${event.aadhar_masked || 'N/A'}</span>
-                            <span class="history-time">· ${formatTimestamp(event.timestamp)}</span>
-                        </div>
-                    </div>
-                    <div class="history-right">
-                        <div class="history-confidence ${confidenceClass}">${confidenceText}</div>
-                        <div class="history-status ${statusClass}">${event.status}</div>
-                    </div>
-                </div>
-            `;
-        }).join('');
     } catch (error) {
         console.error('Error loading verifications:', error);
         historyList.innerHTML = `
@@ -1161,6 +1127,86 @@ async function populateDashboard() {
     }
 }
 
+function filterDashboard() {
+    const searchTerm = document.getElementById('historySearch')?.value.toLowerCase() || '';
+    const statusFilter = document.getElementById('statusFilter')?.value || 'all';
+    const timeFilter = document.getElementById('timeFilter')?.value || 'all';
+
+    let filtered = [...allVerificationHistory];
+
+    // Status filter
+    if (statusFilter !== 'all') {
+        filtered = filtered.filter(e => e.status === statusFilter);
+    }
+
+    // Time filter
+    if (timeFilter !== 'all') {
+        const now = new Date();
+        const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+        const startOfWeek = new Date(now.setDate(now.getDate() - 7));
+
+        if (timeFilter === 'today') {
+            filtered = filtered.filter(e => new Date(e.timestamp) >= startOfDay);
+        } else if (timeFilter === 'week') {
+            filtered = filtered.filter(e => new Date(e.timestamp) >= startOfWeek);
+        }
+    }
+
+    // Search filter
+    if (searchTerm) {
+        filtered = filtered.filter(e =>
+            (e.user_name?.toLowerCase().includes(searchTerm)) ||
+            (e.aadhar_masked?.toLowerCase().includes(searchTerm))
+        );
+    }
+
+    renderHistoryList(filtered);
+}
+
+function renderHistoryList(history) {
+    const historyList = document.getElementById('historyTableBody');
+    const historyCountEl = document.getElementById('historyCount');
+
+    if (historyCountEl) {
+        historyCountEl.textContent = `${history.length} record${history.length !== 1 ? 's' : ''}`;
+    }
+
+    if (history.length === 0) {
+        historyList.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">📭</div>
+                <p>No records found</p>
+                <span class="empty-hint">Try adjusting your filters</span>
+            </div>
+        `;
+        return;
+    }
+
+    historyList.innerHTML = history.map(event => {
+        const statusClass = event.status === 'success' ? 'success' : 'failed';
+        const statusIcon = event.status === 'success' ? '✓' : '✗';
+        const confidenceClass = getConfidenceClass(event.confidence_score);
+        const confidenceText = event.confidence_score !== null ? `${event.confidence_score}%` : 'N/A';
+
+        return `
+            <div class="history-item">
+                <div class="history-avatar ${statusClass}">${statusIcon}</div>
+                <div class="history-info">
+                    <div class="history-name">${event.user_name || 'Unknown'}</div>
+                    <div class="history-meta">
+                        <span class="history-aadhar">${event.aadhar_masked || 'N/A'}</span>
+                        <span class="history-time">· ${formatTimestamp(event.timestamp)}</span>
+                    </div>
+                </div>
+                <div class="history-right">
+                    <div class="history-confidence ${confidenceClass}">${confidenceText}</div>
+                    <div class="history-status ${statusClass}">${event.status}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 async function clearLoginHistory() {
     if (confirm('Are you sure you want to clear all verification history? This action cannot be undone.')) {
         try {
@@ -1169,6 +1215,7 @@ async function clearLoginHistory() {
             });
 
             if (response.ok) {
+                allVerificationHistory = [];
                 await populateDashboard();
                 console.log('Verification history cleared from D1');
             } else {
@@ -1184,3 +1231,5 @@ async function clearLoginHistory() {
 // Expose dashboard functions to global scope for onclick handlers
 window.goToDashboard = goToDashboard;
 window.clearLoginHistory = clearLoginHistory;
+window.populateDashboard = populateDashboard;
+window.filterDashboard = filterDashboard;
