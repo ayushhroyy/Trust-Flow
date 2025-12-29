@@ -358,6 +358,7 @@ async function scanAadharCard(request, env, corsHeaders) {
 
         // Convert image to base64 (chunked to avoid stack overflow)
         const imageBuffer = await image.arrayBuffer();
+        console.log('Image buffer size:', imageBuffer.byteLength, 'bytes');
         const uint8Array = new Uint8Array(imageBuffer);
         let binary = '';
         const chunkSize = 8192;
@@ -367,8 +368,11 @@ async function scanAadharCard(request, env, corsHeaders) {
         }
         const base64Image = btoa(binary);
         const mimeType = image.type || 'image/jpeg';
+        console.log('Image MIME type:', mimeType);
+        console.log('Base64 image length:', base64Image.length, 'characters');
 
-        // Call OpenRouter API with Gemini model
+        // Call OpenRouter API with GLM model
+        console.log('Making API request to OpenRouter...');
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -378,7 +382,7 @@ async function scanAadharCard(request, env, corsHeaders) {
                 'X-Title': 'Securify Aadhar Scanner'
             },
                 body: JSON.stringify({
-                model: 'google/gemini-2.0-flash-exp',
+                model: 'z-ai/glm-4.6v',
                 messages: [{
                     role: 'user',
                     content: [
@@ -414,6 +418,8 @@ Example response:
             })
         });
 
+        console.log('API response status:', response.status);
+
         if (!response.ok) {
             const errorText = await response.text();
             console.error('OpenRouter API error:', response.status, errorText);
@@ -432,58 +438,70 @@ Example response:
 
         const extractedText = data.choices?.[0]?.message?.content?.trim() || '';
         console.log('Raw OCR response:', extractedText);
+        console.log('Response length:', extractedText.length, 'characters');
 
         // Initialize extracted values
         let name = null;
         let aadhar = null;
 
         // Method 1: Direct JSON parse (most likely format)
+        console.log('Method 1: Trying direct JSON parse...');
         try {
             const parsed = JSON.parse(extractedText);
             name = parsed.name;
             aadhar = parsed.aadhar || parsed.aadhar_number;
-            console.log('Direct JSON parse succeeded:', { name, aadhar });
+            console.log('✓ Direct JSON parse succeeded:', { name, aadhar });
         } catch (e1) {
-            console.log('Direct JSON parse failed, trying regex patterns');
+            console.log('✗ Direct JSON parse failed with error:', e1.message);
 
             // Method 2: Extract JSON from markdown or mixed content
+            console.log('Method 2: Trying to extract JSON from markdown/mixed content...');
             const jsonMatch = extractedText.match(/\{[^{}]*"[^"]*"[^{}]*"[^"]*"[^{}]*\}/) ||
                              extractedText.match(/\{[\s\S]*?\{[\s\S]*?\}[\s\S]*?\}/);
 
+            console.log('JSON match result:', jsonMatch ? 'Found' : 'Not found');
             if (jsonMatch) {
+                console.log('Matched JSON string:', jsonMatch[0]);
                 try {
                     const nestedMatch = jsonMatch[0].match(/\{[\s\S]*?\}/);
                     if (nestedMatch) {
+                        console.log('Nested JSON match:', nestedMatch[0]);
                         const parsed = JSON.parse(nestedMatch[0]);
                         name = parsed.name;
                         aadhar = parsed.aadhar || parsed.aadhar_number;
-                        console.log('Nested JSON parse succeeded:', { name, aadhar });
+                        console.log('✓ Nested JSON parse succeeded:', { name, aadhar });
                     }
                 } catch (e2) {
-                    console.log('Nested JSON parse failed');
+                    console.log('✗ Nested JSON parse failed with error:', e2.message);
                 }
             }
 
             // Method 3: Regex for name and aadhar separately
+            console.log('Method 3: Trying regex extraction for aadhar...');
             if (!aadhar) {
                 const aadharMatch = extractedText.match(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/);
                 if (aadharMatch) {
                     aadhar = aadharMatch[0].replace(/[\s-]/g, '');
-                    console.log('Extracted aadhar via regex:', aadhar);
+                    console.log('✓ Extracted aadhar via dashed regex:', aadhar);
                 } else {
                     const simpleAadhar = extractedText.match(/\d{12}/);
                     if (simpleAadhar) {
                         aadhar = simpleAadhar[0];
-                        console.log('Extracted aadhar via simple regex:', aadhar);
+                        console.log('✓ Extracted aadhar via simple regex:', aadhar);
+                    } else {
+                        console.log('✗ No 12-digit aadhar found in response');
                     }
                 }
             }
 
+            console.log('Method 3: Trying regex extraction for name...');
             if (!name) {
                 const nameMatch = extractedText.match(/"name"\s*:\s*"([^"]+)"/i);
                 if (nameMatch) {
                     name = nameMatch[1];
-                    console.log('Extracted name via regex:', name);
+                    console.log('✓ Extracted name via regex:', name);
+                } else {
+                    console.log('✗ No name found in response');
                 }
             }
         }
@@ -491,7 +509,14 @@ Example response:
         console.log('Final extracted values:', { name, aadhar });
 
         // Validate Aadhar is exactly 12 digits
+        console.log('Validation: Checking if aadhar is valid...');
+        console.log(' - aadhar value:', aadhar);
+        console.log(' - aadhar type:', typeof aadhar);
+        console.log(' - aadhar is NOT_FOUND:', aadhar === 'NOT_FOUND');
+        console.log(' - aadhar passes regex:', aadhar ? /^\d{12}$/.test(aadhar) : 'N/A');
+
         if (aadhar && aadhar !== 'NOT_FOUND' && /^\d{12}$/.test(aadhar)) {
+            console.log('✓ Validation passed! Returning success.');
             return new Response(JSON.stringify({
                 success: true,
                 aadhar_number: aadhar,
@@ -501,7 +526,13 @@ Example response:
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
         } else {
-            console.error('Failed to extract valid Aadhar. aadhar:', aadhar);
+            console.error('✗ Validation failed! Could not extract valid Aadhar.');
+            console.error('Details:', {
+                aadhar_value: aadhar,
+                aadhar_type: typeof aadhar,
+                name_value: name,
+                raw_response_length: extractedText.length
+            });
             return new Response(JSON.stringify({
                 success: false,
                 error: 'Could not extract valid 12-digit Aadhar number from image',
@@ -514,11 +545,13 @@ Example response:
             });
         }
     } catch (error) {
-        console.error('Scan error:', error);
+        console.error('✗ Scan error caught:', error);
+        console.error('Error stack:', error.stack);
         return new Response(JSON.stringify({
             success: false,
             error: 'Failed to process image',
-            details: error.message
+            details: error.message,
+            stack: error.stack
         }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
