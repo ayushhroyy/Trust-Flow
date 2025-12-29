@@ -381,7 +381,7 @@ async function scanAadharCard(request, env, corsHeaders) {
                 'HTTP-Referer': 'https://securify.app',
                 'X-Title': 'Securify Aadhar Scanner'
             },
-                body: JSON.stringify({
+            body: JSON.stringify({
                 model: 'google/gemini-2.5-flash',
                 messages: [{
                     role: 'user',
@@ -391,7 +391,7 @@ async function scanAadharCard(request, env, corsHeaders) {
                             text: `Extract the FULL NAME and 12-digit AADHAR NUMBER from this Aadhar card image.
 
 IMPORTANT: The Aadhar number is usually located at the BOTTOM of the card.
-It is 12 digits in GROUPS OF 3 like: 7447 0823 0225 (three groups separated by spaces)
+It is typically 3 groups of 4 digits separated by spaces, like: 1234 5678 9012.
 Your task: Find the 12-digit Aadhar number and report it WITHOUT ANY SPACES.
 
 DO NOT return "NOT_FOUND" for the aadhar number. Search the entire image for ANY 12-digit number pattern and return it.
@@ -404,15 +404,14 @@ Return your answer in this JSON format:
 
 Rules:
 - name: Extract the complete name as written (uppercase preferred)
-- aadhar: Look at the BOTTOM of the card for the 12-digit number. It appears as three groups of 4 digits with spaces like "7447 0823 0225". Find it and return as exactly 12 consecutive digits with NO SPACES.
-- CRITICAL: Never return "NOT_FOUND" for aadhar. Always try to extract a 12-digit number from the image.
+- aadhar: Look at the BOTTOM of the card for the 12-digit number. It usually appears as three groups of 4 digits (e.g., "7447 0823 0225"). Find it and return it as a single string of 12 digits.
+- CRITICAL: Never return "NOT_FOUND" for aadhar. If you find partial numbers that look like an Aadhar (starts with 2-9, 12 digits), use them.
 - If you truly cannot find any 12-digit number, return an empty string "" for aadhar.
 - Return ONLY the JSON, nothing else
 
 Example valid response:
 {"name": "RAJESH KUMAR SHARMA", "aadhar": "123456789012"}
-
-Note: If you see "7447 0823 0225" or "7447-0823-0225", return "744708230225"`
+`
                         },
                         {
                             type: 'image_url',
@@ -474,7 +473,7 @@ Note: If you see "7447 0823 0225" or "7447-0823-0225", return "744708230225"`
             // Method 2: Extract JSON from markdown or mixed content
             console.log('Method 2: Trying to extract JSON from markdown/mixed content...');
             const jsonMatch = extractedText.match(/\{[^{}]*"[^"]*"[^{}]*"[^"]*"[^{}]*\}/) ||
-                             extractedText.match(/\{[\s\S]*?\{[\s\S]*?\}[\s\S]*?\}/);
+                extractedText.match(/\{[\s\S]*?\{[\s\S]*?\}[\s\S]*?\}/);
 
             console.log('JSON match result:', jsonMatch ? 'Found' : 'Not found');
             if (jsonMatch) {
@@ -547,9 +546,9 @@ Note: If you see "7447 0823 0225" or "7447-0823-0225", return "744708230225"`
         } else {
             console.error('✗ Validation failed! Could not extract valid Aadhar.');
             const failureReason = !aadhar ? 'No aadhar extracted' :
-                                  aadhar === 'NOT_FOUND' ? 'Model returned NOT_FOUND' :
-                                  aadhar === '' ? 'Model returned empty string' :
-                                  !/^\d{12}$/.test(aadhar) ? 'Invalid aadhar format' : 'Unknown';
+                aadhar === 'NOT_FOUND' ? 'Model returned NOT_FOUND' :
+                    aadhar === '' ? 'Model returned empty string' :
+                        !/^\d{12}$/.test(aadhar) ? 'Invalid aadhar format' : 'Unknown';
             console.error('Failure reason:', failureReason);
             console.error('Details:', {
                 aadhar_value: aadhar,
