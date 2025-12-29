@@ -356,9 +356,16 @@ async function scanAadharCard(request, env, corsHeaders) {
             });
         }
 
-        // Convert image to base64
+        // Convert image to base64 (chunked to avoid stack overflow)
         const imageBuffer = await image.arrayBuffer();
-        const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+        const uint8Array = new Uint8Array(imageBuffer);
+        let binary = '';
+        const chunkSize = 8192;
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+            const chunk = uint8Array.slice(i, i + chunkSize);
+            binary += String.fromCharCode(...chunk);
+        }
+        const base64Image = btoa(binary);
         const mimeType = image.type || 'image/jpeg';
 
         // Call OpenRouter API with Gemini model
@@ -371,7 +378,7 @@ async function scanAadharCard(request, env, corsHeaders) {
                 'X-Title': 'Securify Aadhar Scanner'
             },
             body: JSON.stringify({
-                model: 'google/gemini-2.5-flash-lite-preview-06-2025',
+                model: 'google/gemini-2.5-flash-lite-preview-09-2025',
                 messages: [{
                     role: 'user',
                     content: [
