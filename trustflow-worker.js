@@ -378,18 +378,28 @@ async function scanAadharCard(request, env, corsHeaders) {
                 'X-Title': 'Securify Aadhar Scanner'
             },
                 body: JSON.stringify({
-                model: 'google/gemini-3-flash-preview',
+                model: 'google/gemini-2.0-flash-exp',
                 messages: [{
                     role: 'user',
                     content: [
                         {
                             type: 'text',
-                            text: `Extract the name and 12-digit Aadhar number from this Aadhar card image.
-                                   Return ONLY in this exact JSON format:
-                                   {"name": "Full Name as shown", "aadhar": "123456789012"}
-                                   If name is not found, use "NOT_FOUND" for name.
-                                   If Aadhar number is not found, use "NOT_FOUND" for aadhar.
-                                   Example valid response: {"name": "RAJESH KUMAR SHARMA", "aadhar": "123456789012"}`
+                            text: `Please extract the FULL NAME and 12-digit AADHAR NUMBER from this Aadhar card image.
+
+Return your answer in this JSON format:
+{
+  "name": "FULL NAME",
+  "aadhar": "123456789012"
+}
+
+Rules:
+- name: Extract the complete name as written (uppercase preferred)
+- aadhar: The 12-digit number only, no spaces or dashes
+- If you cannot find a field, use "NOT_FOUND"
+- Return ONLY the JSON, nothing else
+
+Example response:
+{"name": "RAJESH KUMAR SHARMA", "aadhar": "123456789012"}`
                         },
                         {
                             type: 'image_url',
@@ -399,66 +409,89 @@ async function scanAadharCard(request, env, corsHeaders) {
                         }
                     ]
                 }],
-                max_tokens: 100,
-                temperature: 0.1
+                max_tokens: 150,
+                temperature: 0
             })
         });
 
         if (!response.ok) {
-            const error = await response.text();
-            console.error('OpenRouter API error:', error);
-            return new Response(JSON.stringify({ error: 'OCR service error', details: error }), {
+            const errorText = await response.text();
+            console.error('OpenRouter API error:', response.status, errorText);
+            return new Response(JSON.stringify({
+                success: false,
+                error: 'OCR service error',
+                details: `API returned ${response.status}: ${errorText}`
+            }), {
                 status: 500,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
         }
 
         const data = await response.json();
+        console.log('Full API response:', JSON.stringify(data, null, 2));
+
         const extractedText = data.choices?.[0]?.message?.content?.trim() || '';
         console.log('Raw OCR response:', extractedText);
 
-        // Try to parse JSON response
+        // Initialize extracted values
         let name = null;
         let aadhar = null;
 
-        // Method 1: Try to find and parse JSON
+        // Method 1: Direct JSON parse (most likely format)
         try {
-            const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
+            const parsed = JSON.parse(extractedText);
+            name = parsed.name;
+            aadhar = parsed.aadhar || parsed.aadhar_number;
+            console.log('Direct JSON parse succeeded:', { name, aadhar });
+        } catch (e1) {
+            console.log('Direct JSON parse failed, trying regex patterns');
+
+            // Method 2: Extract JSON from markdown or mixed content
+            const jsonMatch = extractedText.match(/\{[^{}]*"[^"]*"[^{}]*"[^"]*"[^{}]*\}/) ||
+                             extractedText.match(/\{[\s\S]*?\{[\s\S]*?\}[\s\S]*?\}/);
+
             if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]);
-                name = parsed.name || null;
-                aadhar = parsed.aadhar || parsed.aadhar_number || null;
-                console.log('Parsed from JSON:', { name, aadhar });
-            }
-        } catch (e) {
-            console.log('JSON parse failed, trying regex');
-        }
-
-        // Method 2: Fallback to regex extraction if JSON parsing failed
-        if (!aadhar) {
-            const aadharMatch = extractedText.match(/\d{12}/);
-            if (aadharMatch) {
-                aadhar = aadharMatch[0];
-                console.log('Extracted aadhar via regex:', aadhar);
-            }
-        }
-
-        // Method 3: Try to extract name using regex (look for capitalized name patterns)
-        if (!name && extractedText) {
-            const lines = extractedText.split('\n');
-            for (const line of lines) {
-                const match = line.match(/"name"\s*:\s*"([^"]+)"/);
-                if (match) {
-                    name = match[1];
-                    break;
+                try {
+                    const nestedMatch = jsonMatch[0].match(/\{[\s\S]*?\}/);
+                    if (nestedMatch) {
+                        const parsed = JSON.parse(nestedMatch[0]);
+                        name = parsed.name;
+                        aadhar = parsed.aadhar || parsed.aadhar_number;
+                        console.log('Nested JSON parse succeeded:', { name, aadhar });
+                    }
+                } catch (e2) {
+                    console.log('Nested JSON parse failed');
                 }
             }
-            console.log('Extracted name via regex:', name);
+
+            // Method 3: Regex for name and aadhar separately
+            if (!aadhar) {
+                const aadharMatch = extractedText.match(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/);
+                if (aadharMatch) {
+                    aadhar = aadharMatch[0].replace(/[\s-]/g, '');
+                    console.log('Extracted aadhar via regex:', aadhar);
+                } else {
+                    const simpleAadhar = extractedText.match(/\d{12}/);
+                    if (simpleAadhar) {
+                        aadhar = simpleAadhar[0];
+                        console.log('Extracted aadhar via simple regex:', aadhar);
+                    }
+                }
+            }
+
+            if (!name) {
+                const nameMatch = extractedText.match(/"name"\s*:\s*"([^"]+)"/i);
+                if (nameMatch) {
+                    name = nameMatch[1];
+                    console.log('Extracted name via regex:', name);
+                }
+            }
         }
 
         console.log('Final extracted values:', { name, aadhar });
 
-        if (aadhar && aadhar !== 'NOT_FOUND') {
+        // Validate Aadhar is exactly 12 digits
+        if (aadhar && aadhar !== 'NOT_FOUND' && /^\d{12}$/.test(aadhar)) {
             return new Response(JSON.stringify({
                 success: true,
                 aadhar_number: aadhar,
@@ -468,10 +501,12 @@ async function scanAadharCard(request, env, corsHeaders) {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
         } else {
-            console.error('Failed to extract Aadhar. aadhar:', aadhar);
+            console.error('Failed to extract valid Aadhar. aadhar:', aadhar);
             return new Response(JSON.stringify({
                 success: false,
-                error: 'Could not extract Aadhar number from image',
+                error: 'Could not extract valid 12-digit Aadhar number from image',
+                extracted_aadhar: aadhar,
+                extracted_name: name,
                 raw_response: extractedText
             }), {
                 status: 400,
@@ -480,7 +515,11 @@ async function scanAadharCard(request, env, corsHeaders) {
         }
     } catch (error) {
         console.error('Scan error:', error);
-        return new Response(JSON.stringify({ error: 'Failed to process image', details: error.message }), {
+        return new Response(JSON.stringify({
+            success: false,
+            error: 'Failed to process image',
+            details: error.message
+        }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
