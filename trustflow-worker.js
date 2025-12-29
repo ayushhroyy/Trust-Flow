@@ -388,10 +388,12 @@ async function scanAadharCard(request, env, corsHeaders) {
                     content: [
                         {
                             type: 'text',
-                            text: `Please extract the FULL NAME and 12-digit AADHAR NUMBER from this Aadhar card image.
+                            text: `Extract the FULL NAME and 12-digit AADHAR NUMBER from this Aadhar card image.
 
 IMPORTANT: The Aadhar number is located at the BOTTOM of the card and appears in groups of 4 digits like: XXXX XXXX XXXX or XXXX-XXXX-XXXX
 You MUST remove ALL spaces and dashes from the number to return exactly 12 consecutive digits.
+
+DO NOT return "NOT_FOUND" for the aadhar number. Instead, search the entire image for ANY 12-digit number and return it. Even if you're not 100% sure it's the Aadhar number, return the best 12-digit number you can find.
 
 Return your answer in this JSON format:
 {
@@ -402,7 +404,8 @@ Return your answer in this JSON format:
 Rules:
 - name: Extract the complete name as written (uppercase preferred)
 - aadhar: Look at the BOTTOM of the card for the 12-digit number. It appears as "XXXX XXXX XXXX" or "XXXX-XXXX-XXXX". Remove ALL spaces and dashes and return exactly 12 consecutive digits.
-- If you cannot find a field, use "NOT_FOUND"
+- CRITICAL: Never return "NOT_FOUND" for aadhar. Always try to extract a 12-digit number from the image.
+- If you truly cannot find any 12-digit number, return an empty string "" for aadhar.
 - Return ONLY the JSON, nothing else
 
 Example valid response:
@@ -455,7 +458,15 @@ Note: If you see "1234 5678 9012" or "1234-5678-9012", return "123456789012"`
             const parsed = JSON.parse(extractedText);
             name = parsed.name;
             aadhar = parsed.aadhar || parsed.aadhar_number;
-            console.log('✓ Direct JSON parse succeeded:', { name, aadhar });
+
+            // Check if NOT_FOUND
+            if (aadhar === 'NOT_FOUND' || name === 'NOT_FOUND') {
+                console.log('Model returned NOT_FOUND for:', { name, aadhar });
+                if (aadhar === 'NOT_FOUND') aadhar = null;
+                if (name === 'NOT_FOUND') name = null;
+            } else {
+                console.log('✓ Direct JSON parse succeeded:', { name, aadhar });
+            }
         } catch (e1) {
             console.log('✗ Direct JSON parse failed with error:', e1.message);
 
@@ -518,9 +529,11 @@ Note: If you see "1234 5678 9012" or "1234-5678-9012", return "123456789012"`
         console.log(' - aadhar value:', aadhar);
         console.log(' - aadhar type:', typeof aadhar);
         console.log(' - aadhar is NOT_FOUND:', aadhar === 'NOT_FOUND');
+        console.log(' - aadhar is empty string:', aadhar === '');
         console.log(' - aadhar passes regex:', aadhar ? /^\d{12}$/.test(aadhar) : 'N/A');
 
-        if (aadhar && aadhar !== 'NOT_FOUND' && /^\d{12}$/.test(aadhar)) {
+        // Accept: 12-digit number, empty string (try again), but NOT NOT_FOUND
+        if (aadhar && aadhar !== 'NOT_FOUND' && aadhar !== '' && /^\d{12}$/.test(aadhar)) {
             console.log('✓ Validation passed! Returning success.');
             return new Response(JSON.stringify({
                 success: true,
@@ -532,6 +545,11 @@ Note: If you see "1234 5678 9012" or "1234-5678-9012", return "123456789012"`
             });
         } else {
             console.error('✗ Validation failed! Could not extract valid Aadhar.');
+            const failureReason = !aadhar ? 'No aadhar extracted' :
+                                  aadhar === 'NOT_FOUND' ? 'Model returned NOT_FOUND' :
+                                  aadhar === '' ? 'Model returned empty string' :
+                                  !/^\d{12}$/.test(aadhar) ? 'Invalid aadhar format' : 'Unknown';
+            console.error('Failure reason:', failureReason);
             console.error('Details:', {
                 aadhar_value: aadhar,
                 aadhar_type: typeof aadhar,
@@ -540,7 +558,7 @@ Note: If you see "1234 5678 9012" or "1234-5678-9012", return "123456789012"`
             });
             return new Response(JSON.stringify({
                 success: false,
-                error: 'Could not extract valid 12-digit Aadhar number from image',
+                error: `Could not extract valid 12-digit Aadhar number from image (${failureReason})`,
                 extracted_aadhar: aadhar,
                 extracted_name: name,
                 raw_response: extractedText
