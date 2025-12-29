@@ -378,7 +378,7 @@ async function scanAadharCard(request, env, corsHeaders) {
                 'X-Title': 'Securify Aadhar Scanner'
             },
                 body: JSON.stringify({
-                model: 'mistralai/mistral-small-3.2-24b-instruct',
+                model: 'google/gemini-3-flash-preview',
                 messages: [{
                     role: 'user',
                     content: [
