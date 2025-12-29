@@ -2,22 +2,25 @@
 // Calculates minimum profit with credit score-based benchmark margins in INR
 
 addEventListener('fetch', event => {
-  event.respondWith(handleRequest(event.request))
+  event.respondWith(handleRequest(event.request, event.env))
 })
 
-// Define environment variables for Mistral AI API
-const MISTRAL_API_KEY = "YOUR_API_KEY_HERE"; // User provided Mistral AI API key
 const MISTRAL_API_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"; // OpenRouter endpoint for Mistral AI
-const MISTRAL_MODEL = "mistralai/mistral-small-3.2-24b-instruct"; // User provided model name
+const MISTRAL_MODEL = "mistralai/mistral-small-3.2-24b-instruct"; // Model name
 
 // Function for calling Mistral AI for general purposes (e.g., negotiation)
-async function callMistralAI(messages) {
+async function callMistralAI(messages, env) {
+  const apiKey = env?.MISTRAL_API_KEY;
+  if (!apiKey) {
+    throw new Error('MISTRAL_API_KEY environment variable not set');
+  }
+
   try {
     const response = await fetch(MISTRAL_API_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${MISTRAL_API_KEY}`
+        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         model: MISTRAL_MODEL,
@@ -41,7 +44,12 @@ async function callMistralAI(messages) {
 }
 
 // Function for calling Mistral AI for master agent oversight
-async function callMasterAgentAI(loanDetails) {
+async function callMasterAgentAI(loanDetails, env) {
+  const apiKey = env?.MISTRAL_API_KEY;
+  if (!apiKey) {
+    return "Error: MISTRAL_API_KEY environment variable not set";
+  }
+
   const prompt = `You are a master agent overseeing loan applications. Your task is to identify only *critical problems and abnormalities* in the provided loan application details that are truly unrealistic or nonsensical, suggesting potential fraud or severe user error. Do not flag minor discrepancies or values that are merely unusual but still plausible.
 
   Loan Application Details:
@@ -52,13 +60,13 @@ async function callMasterAgentAI(loanDetails) {
   - Time Period (in months): ${loanDetails.timeInMonths}
 
   Specifically look for:
-  - **Extremely unrealistic interest rates:** e.g., 1000% or 0.01% (unless the principal is also extremely low, making it plausible).
+  - **Extremely unrealistic interest rates:** e.g., 1000% or 0.01% (unless principal is also extremely low, making it plausible).
   - **Grossly disproportionate salary to principal:** e.g., a salary of 88 INR for a principal of 1,00,000 INR.
   - **Credit scores outside the 300-900 range, or values like 0 or negative.**
   - **Principal amounts that are extremely high or low beyond any reasonable loan request, or negative.**
   - **Loan durations (time in months) that are absurdly short (e.g., 0 or 1 month for a large loan) or excessively long (e.g., 1000+ months).**
 
-  If you detect a *critical problem or abnormality*, provide a concise warning message explaining the issue. If there are multiple critical issues, list them. If the data seems reasonable and does not contain any critical or ridiculous flaws, respond *only* with the text "OK".
+  If you detect a *critical problem or abnormality*, provide a concise warning message explaining the issue. If there are multiple critical issues, list them. If data seems reasonable and does not contain any critical or ridiculous flaws, respond *only* with the text "OK".
 
   Example of a critical warning: "Warning: Unrealistic interest rate (1000%). This is highly suspicious and requires immediate review."
   Example of another critical warning: "Warning: Annual Salary (88 INR) is critically low for a principal amount of ${loanDetails.principal} INR. This suggests a potential data entry error or fraudulent attempt."
@@ -70,7 +78,7 @@ async function callMasterAgentAI(loanDetails) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${MISTRAL_API_KEY}`
+        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         model: MISTRAL_MODEL, // Using the same model for consistency
@@ -94,7 +102,7 @@ async function callMasterAgentAI(loanDetails) {
 }
 
 
-async function handleRequest(request) {
+async function handleRequest(request, env) {
   // Set CORS headers
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -201,7 +209,7 @@ async function handleRequest(request) {
 
       // Master Agent Oversight
       const loanDetailsForAgent = { principal, interestRate, creditScore, salary, timeInMonths };
-      const agentFeedback = await callMasterAgentAI(loanDetailsForAgent);
+      const agentFeedback = await callMasterAgentAI(loanDetailsForAgent, env);
 
       if (agentFeedback !== "OK") {
         return new Response(JSON.stringify({
@@ -245,7 +253,7 @@ async function handleRequest(request) {
         messages.push({ "role": "system", "content": systemMessage });
         messages.push({ "role": "user", "content": negotiationMessage });
 
-        const llmResponse = await callMistralAI(messages);
+        const llmResponse = await callMistralAI(messages, env);
 
         let llmNegotiatorPara;
         try {
