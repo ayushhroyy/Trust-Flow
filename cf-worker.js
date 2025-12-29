@@ -1,9 +1,12 @@
-// Cloudflare Worker for Finance Platform
+// Cloudflare Worker for TrustFlow - Finance Platform with D1 Database
 // Calculates minimum profit with credit score-based benchmark margins in INR
+// Now includes D1 database for users and verification logs
 
-addEventListener('fetch', event => {
-  event.respondWith(handleRequest(event.request))
-})
+export default {
+  async fetch(request, env, ctx) {
+    return handleRequest(request, env);
+  }
+};
 
 // Define environment variables for Mistral AI API
 const MISTRAL_API_KEY = "YOUR_API_KEY_HERE"; // User provided Mistral AI API key
@@ -94,11 +97,11 @@ async function callMasterAgentAI(loanDetails) {
 }
 
 
-async function handleRequest(request) {
+async function handleRequest(request, env) {
   // Set CORS headers
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Content-Type': 'application/json'
   }
@@ -106,6 +109,13 @@ async function handleRequest(request) {
   // Handle CORS preflight
   if (request.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
+  }
+
+  const url = new URL(request.url);
+
+  // Route to D1 API handlers
+  if (url.pathname.startsWith('/api/')) {
+    return handleD1Request(request, env, corsHeaders);
   }
 
   // Handle POST requests
@@ -124,15 +134,15 @@ async function handleRequest(request) {
             creditScore: creditScore !== undefined,
             salary: salary !== undefined
           }
-        }), { 
-          status: 400, 
-          headers: corsHeaders 
+        }), {
+          status: 400,
+          headers: corsHeaders
         })
       }
 
       // Type validation
-      if (typeof principal !== 'number' || typeof interestRate !== 'number' || 
-          typeof creditScore !== 'number' || typeof salary !== 'number') {
+      if (typeof principal !== 'number' || typeof interestRate !== 'number' ||
+        typeof creditScore !== 'number' || typeof salary !== 'number') {
         return new Response(JSON.stringify({
           error: 'All fields must be numbers',
           types: {
@@ -141,9 +151,9 @@ async function handleRequest(request) {
             creditScore: typeof creditScore,
             salary: typeof salary
           }
-        }), { 
-          status: 400, 
-          headers: corsHeaders 
+        }), {
+          status: 400,
+          headers: corsHeaders
         })
       }
 
@@ -151,9 +161,9 @@ async function handleRequest(request) {
         return new Response(JSON.stringify({
           error: 'Principal must be a positive number',
           provided: principal
-        }), { 
-          status: 400, 
-          headers: corsHeaders 
+        }), {
+          status: 400,
+          headers: corsHeaders
         })
       }
 
@@ -161,9 +171,9 @@ async function handleRequest(request) {
         return new Response(JSON.stringify({
           error: 'Interest rate cannot be negative',
           provided: interestRate
-        }), { 
-          status: 400, 
-          headers: corsHeaders 
+        }), {
+          status: 400,
+          headers: corsHeaders
         })
       }
 
@@ -171,9 +181,9 @@ async function handleRequest(request) {
         return new Response(JSON.stringify({
           error: 'Salary must be a positive number',
           provided: salary
-        }), { 
-          status: 400, 
-          headers: corsHeaders 
+        }), {
+          status: 400,
+          headers: corsHeaders
         })
       }
 
@@ -181,9 +191,9 @@ async function handleRequest(request) {
         return new Response(JSON.stringify({
           error: 'Credit score must be between 300 and 900',
           provided: creditScore
-        }), { 
-          status: 400, 
-          headers: corsHeaders 
+        }), {
+          status: 400,
+          headers: corsHeaders
         })
       }
 
@@ -193,9 +203,9 @@ async function handleRequest(request) {
         return new Response(JSON.stringify({
           error: 'Time in months must be a positive number',
           provided: timeMonths
-        }), { 
-          status: 400, 
-          headers: corsHeaders 
+        }), {
+          status: 400,
+          headers: corsHeaders
         })
       }
 
@@ -216,7 +226,7 @@ async function handleRequest(request) {
 
       // First, always calculate the initial offer
       const initialResult = calculateCreditBasedProfit(principal, interestRate, creditScore, salary, timeMonths)
-      
+
       // Check if this is a negotiation request
       let result
       if (negotiationMessage) {
@@ -240,13 +250,13 @@ async function handleRequest(request) {
         Example response: {"R": 10.5, "T": 24, "attemptNumber": 1}
         Only respond with the JSON object. Do NOT include any other text.
         `
-        
+
         const messages = conversationHistory ? [...conversationHistory] : [];
-        messages.push({"role": "system", "content": systemMessage});
-        messages.push({"role": "user", "content": negotiationMessage});
-        
+        messages.push({ "role": "system", "content": systemMessage });
+        messages.push({ "role": "user", "content": negotiationMessage });
+
         const llmResponse = await callMistralAI(messages);
-        
+
         let llmNegotiatorPara;
         try {
           llmNegotiatorPara = JSON.parse(llmResponse);
@@ -272,9 +282,9 @@ async function handleRequest(request) {
           T: llmNegotiatorPara.T,
           attemptNumber: llmNegotiatorPara.attemptNumber
         };
-        
+
         result = handleNegotiation(principal, interestRate, creditScore, salary, timeMonths, updatedNegotiatorPara, initialResult)
-        result.conversationHistory = [...messages, {"role": "assistant", "content": llmResponse}]; // Update history with LLM response
+        result.conversationHistory = [...messages, { "role": "assistant", "content": llmResponse }]; // Update history with LLM response
       } else if (negotiatorPara) {
         // Direct negotiation with negotiatorPara
         if (initialResult.evaluation.meetsRequirement) {
@@ -286,13 +296,13 @@ async function handleRequest(request) {
             headers: corsHeaders
           })
         }
-        
+
         // Handle negotiation with original values as context
         result = handleNegotiation(principal, interestRate, creditScore, salary, timeInMonths, negotiatorPara, initialResult)
       } else {
         result = initialResult
       }
-      
+
       return new Response(JSON.stringify(result, null, 2), {
         headers: corsHeaders
       })
@@ -302,9 +312,9 @@ async function handleRequest(request) {
         error: 'Invalid JSON or request format',
         details: error.message,
         stack: error.stack
-      }), { 
-        status: 400, 
-        headers: corsHeaders 
+      }), {
+        status: 400,
+        headers: corsHeaders
       })
     }
   }
@@ -409,9 +419,9 @@ async function handleRequest(request) {
 
   return new Response(JSON.stringify({
     error: 'Method not allowed. Use GET for documentation or POST for calculations.'
-  }), { 
-    status: 405, 
-    headers: corsHeaders 
+  }), {
+    status: 405,
+    headers: corsHeaders
   })
 }
 
@@ -455,20 +465,20 @@ function getCreditCategory(creditScore) {
 function calculateCreditBasedProfit(principal, interestRate, creditScore, salary, timeInMonths) {
   const creditInfo = getCreditCategory(creditScore)
   const userInterestRateDecimal = interestRate / 100
-  
+
   // Calculate user's proposed profit
   const userAnnualProfit = principal * userInterestRateDecimal
   const userMonthlyProfit = userAnnualProfit / 12
   const userTotalProfit = userMonthlyProfit * timeInMonths
-  
+
   // Calculate benchmark profit based on credit category
   const benchmarkAnnualProfit = principal * creditInfo.benchmarkRate
   const benchmarkMonthlyProfit = benchmarkAnnualProfit / 12
   const benchmarkTotalProfit = benchmarkMonthlyProfit * timeInMonths
-  
+
   // Check if user's rate meets or exceeds benchmark
   const meetsRequirement = userInterestRateDecimal >= creditInfo.benchmarkRate
-  
+
   let response = {
     currency: 'INR',
     userProfile: {
@@ -506,17 +516,17 @@ function calculateCreditBasedProfit(principal, interestRate, creditScore, salary
       meetsRequirement: meetsRequirement,
       profitGap: meetsRequirement ? 0 : parseFloat((benchmarkTotalProfit - userTotalProfit).toFixed(2)),
       profitGapFormatted: meetsRequirement ? formatINR(0) : formatINR(benchmarkTotalProfit - userTotalProfit),
-      message: meetsRequirement 
-        ? '✓ Proposed interest rate meets or exceeds the benchmark requirement.' 
+      message: meetsRequirement
+        ? '✓ Proposed interest rate meets or exceeds the benchmark requirement.'
         : '✗ Proposed interest rate is below the benchmark requirement. Please review the recommended options below.'
     }
   }
-  
+
   // If user's rate doesn't meet requirement, provide varied options
   if (!meetsRequirement) {
     const rateOptions = generateVariedRateOptions(principal, creditInfo.benchmarkRate, timeInMonths)
     const timeOptions = generateTimeOptions(principal, interestRate, creditInfo.benchmarkRate, benchmarkTotalProfit)
-    
+
     response.recommendedOptions = {
       message: 'Here are varied options to meet or exceed the profit margin:',
       byAdjustingRate: {
@@ -528,7 +538,7 @@ function calculateCreditBasedProfit(principal, interestRate, creditScore, salary
         options: timeOptions
       }
     }
-    
+
     response.negotiationAvailable = {
       available: true,
       message: 'Not satisfied with these options? You can negotiate by providing a negotiatorPara object in your next request.',
@@ -547,7 +557,7 @@ function calculateCreditBasedProfit(principal, interestRate, creditScore, salary
       message: 'Your offer meets the benchmark requirement. No negotiation needed.'
     }
   }
-  
+
   return response
 }
 
@@ -556,22 +566,22 @@ function generateVariedRateOptions(principal, benchmarkRate, timeInMonths) {
   const option1Rate = benchmarkRate // Minimum
   const option2Rate = benchmarkRate * 1.15 // 15% higher than benchmark
   const option3Rate = benchmarkRate * 1.35 // 35% higher than benchmark
-  
+
   const options = []
-  
+
   const rates = [
     { rate: option1Rate, label: 'Minimum Required' },
     { rate: option2Rate, label: 'Recommended' },
     { rate: option3Rate, label: 'Premium' }
   ]
-  
+
   for (let i = 0; i < rates.length; i++) {
     const rate = rates[i].rate
     const annualProfit = principal * rate
     const monthlyProfit = annualProfit / 12
     const totalProfit = monthlyProfit * timeInMonths
     const monthlyEMI = calculateEMI(principal, rate * 100, timeInMonths)
-    
+
     options.push({
       optionNumber: i + 1,
       optionLabel: rates[i].label,
@@ -585,13 +595,13 @@ function generateVariedRateOptions(principal, benchmarkRate, timeInMonths) {
       monthlyEMI: formatINR(monthlyEMI)
     })
   }
-  
+
   return options
 }
 
 function handleNegotiation(originalPrincipal, originalRate, creditScore, salary, originalTime, negotiatorPara, initialResult) {
   const { P, R, T, attemptNumber } = negotiatorPara
-  
+
   // Validate attempt number
   if (!attemptNumber || attemptNumber < 1 || attemptNumber > 3) {
     return {
@@ -599,7 +609,7 @@ function handleNegotiation(originalPrincipal, originalRate, creditScore, salary,
       provided: attemptNumber
     }
   }
-  
+
   if (attemptNumber > 3) {
     return {
       error: 'Maximum negotiation attempts (3) exceeded. Please proceed with one of the original offers.',
@@ -607,15 +617,15 @@ function handleNegotiation(originalPrincipal, originalRate, creditScore, salary,
       originalOptions: initialResult.recommendedOptions
     }
   }
-  
+
   const creditInfo = getCreditCategory(creditScore)
-  
+
   // Determine what values to use
   let workingPrincipal = originalPrincipal
   let workingRate = originalRate
   let workingTime = originalTime
   let negotiatedParameter = null
-  
+
   // Identify what was negotiated
   if (P !== undefined && R === undefined && T === undefined) {
     // User negotiated Principal only
@@ -642,16 +652,16 @@ function handleNegotiation(originalPrincipal, originalRate, creditScore, salary,
     if (T !== undefined) workingTime = T
     negotiatedParameter = 'MULTIPLE'
   }
-  
+
   // Calculate the negotiated offer
   const negotiatedResult = calculateCreditBasedProfit(workingPrincipal, workingRate, creditScore, salary, workingTime)
-  
+
   // Generate counter-offer only if benchmark is not met
   let counterOffer = null
   if (!negotiatedResult.evaluation.meetsRequirement) {
     counterOffer = generateCounterOffer(workingPrincipal, workingRate, workingTime, creditInfo, negotiatedParameter)
   }
-  
+
   return {
     negotiation: {
       attemptNumber: attemptNumber,
@@ -703,20 +713,20 @@ function generateCounterOffer(principal, rate, time, creditInfo, negotiatedParam
   const benchmarkAnnualProfit = principal * benchmarkRate
   const benchmarkMonthlyProfit = benchmarkAnnualProfit / 12
   const requiredTotalProfit = benchmarkMonthlyProfit * time
-  
+
   let counterOffer = {
     description: 'Our counter-offer to meet the benchmark requirement',
     note: 'Principal amount (P) is never modified as per policy'
   }
-  
+
   // Generate counter based on what was negotiated
-  switch(negotiatedParam) {
+  switch (negotiatedParam) {
     case 'P':
       // User wants different principal - we adjust R and T (but keep P fixed in counter)
       // Since we can't change P, we'll adjust R or T
       const newRate1 = benchmarkRate * 100
       const newTime1 = time
-      
+
       counterOffer.offer = {
         principal: formatINR(principal),
         principalAmount: principal,
@@ -729,12 +739,12 @@ function generateCounterOffer(principal, rate, time, creditInfo, negotiatedParam
         monthlyEMI: formatINR(calculateEMI(principal, newRate1, newTime1))
       }
       break
-      
+
     case 'R':
       // User wants different rate - we keep P, R fixed and adjust T
       const currentRateDecimal = rate / 100
       const currentMonthlyProfit = (principal * currentRateDecimal) / 12
-      
+
       if (currentMonthlyProfit <= 0) {
         counterOffer.offer = {
           message: 'Cannot generate counter-offer with 0% or negative interest rate. Please increase the rate.',
@@ -742,7 +752,7 @@ function generateCounterOffer(principal, rate, time, creditInfo, negotiatedParam
         }
       } else {
         const requiredMonths = Math.ceil(requiredTotalProfit / currentMonthlyProfit)
-        
+
         counterOffer.offer = {
           principal: formatINR(principal),
           principalAmount: principal,
@@ -756,13 +766,13 @@ function generateCounterOffer(principal, rate, time, creditInfo, negotiatedParam
         }
       }
       break
-      
+
     case 'T':
       // User wants different time - we keep P, T fixed and adjust R
       const requiredMonthlyProfit = requiredTotalProfit / time
       const requiredAnnualProfit = requiredMonthlyProfit * 12
       const requiredRate = (requiredAnnualProfit / principal) * 100
-      
+
       counterOffer.offer = {
         principal: formatINR(principal),
         principalAmount: principal,
@@ -775,14 +785,14 @@ function generateCounterOffer(principal, rate, time, creditInfo, negotiatedParam
         monthlyEMI: formatINR(calculateEMI(principal, requiredRate, time))
       }
       break
-      
+
     case 'ALL':
     case 'MULTIPLE':
       // User negotiated multiple params - adjust R to meet benchmark at given P and T
       const reqMonthlyProfit = requiredTotalProfit / time
       const reqAnnualProfit = reqMonthlyProfit * 12
       const reqRate = (reqAnnualProfit / principal) * 100
-      
+
       counterOffer.offer = {
         principal: formatINR(principal),
         principalAmount: principal,
@@ -795,26 +805,26 @@ function generateCounterOffer(principal, rate, time, creditInfo, negotiatedParam
         monthlyEMI: formatINR(calculateEMI(principal, reqRate, time))
       }
       break
-      
+
     default:
       counterOffer.offer = {
         message: 'Unable to generate counter-offer. Please specify negotiation parameters.'
       }
   }
-  
+
   return counterOffer
 }
 
 function generateTimeOptions(principal, currentRate, benchmarkRate, requiredProfit) {
   const currentRateDecimal = currentRate / 100
-  
+
   // If current rate is 0, we can't generate time options
   if (currentRateDecimal === 0) {
     return [{
       message: 'Cannot calculate time options with 0% interest rate. Please use rate adjustment options above.'
     }]
   }
-  
+
   // Calculate the annual profit at the current rate
   const annualProfitAtCurrentRate = principal * currentRateDecimal;
   const monthlyProfitAtCurrentRate = annualProfitAtCurrentRate / 12;
@@ -833,12 +843,12 @@ function generateTimeOptions(principal, currentRate, benchmarkRate, requiredProf
     { months: shortTermMonths, label: 'Shorter Duration' },
     { months: mediumTermMonths, label: 'Standard Duration' },
     { months: longTermMonths, label: 'Extended Duration' }
- ];
-  
+  ];
+
   for (let i = 0; i < timeOptions.length; i++) {
     const months = timeOptions[i].months
     const profit = monthlyProfitAtCurrentRate * months
-    
+
     // For shorter duration, calculate required rate
     // Calculate the rate needed to meet the required profit for the given time (months)
     const requiredMonthlyProfitForTime = requiredProfit / months
@@ -860,7 +870,7 @@ function generateTimeOptions(principal, currentRate, benchmarkRate, requiredProf
       note: `Interest rate adjusted to ${neededRateForTime.toFixed(2)}% to meet benchmark profit for ${months} months.`
     })
   }
-  
+
   return options
 }
 
@@ -871,4 +881,193 @@ function calculateEMI(principal, annualInterestRate, timeInMonths) {
   const monthlyInterestRate = (annualInterestRate / 100) / 12;
   const emi = principal * monthlyInterestRate * Math.pow((1 + monthlyInterestRate), timeInMonths) / (Math.pow((1 + monthlyInterestRate), timeInMonths) - 1);
   return emi;
+}
+
+// =============================================
+// D1 Database API Handlers
+// =============================================
+
+async function handleD1Request(request, env, corsHeaders) {
+  const url = new URL(request.url);
+  const path = url.pathname;
+  const method = request.method;
+
+  try {
+    // Users API
+    if (path === '/api/users' && method === 'GET') {
+      return await getUsers(env, corsHeaders);
+    }
+
+    if (path.startsWith('/api/users/') && method === 'GET') {
+      const identifier = path.split('/').pop();
+      return await getUserByIdentifier(env, identifier, corsHeaders);
+    }
+
+    if (path === '/api/users' && method === 'POST') {
+      const data = await request.json();
+      return await createUser(env, data, corsHeaders);
+    }
+
+    // Verification Logs API
+    if (path === '/api/logs' && method === 'GET') {
+      const limit = url.searchParams.get('limit') || 100;
+      return await getLogs(env, parseInt(limit), corsHeaders);
+    }
+
+    if (path === '/api/logs' && method === 'POST') {
+      const data = await request.json();
+      return await createLog(env, data, corsHeaders);
+    }
+
+    if (path === '/api/logs' && method === 'DELETE') {
+      return await clearLogs(env, corsHeaders);
+    }
+
+    // Stats API
+    if (path === '/api/stats' && method === 'GET') {
+      return await getStats(env, corsHeaders);
+    }
+
+    return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
+      status: 404,
+      headers: corsHeaders
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({
+      error: 'Database error',
+      details: error.message
+    }), {
+      status: 500,
+      headers: corsHeaders
+    });
+  }
+}
+
+// Get all users
+async function getUsers(env, corsHeaders) {
+  const result = await env.DB.prepare(
+    'SELECT id, name, aadhar_id, phone_number, credit_score, created_at FROM users ORDER BY created_at DESC'
+  ).all();
+
+  return new Response(JSON.stringify(result.results), { headers: corsHeaders });
+}
+
+// Get user by Aadhar or Phone
+async function getUserByIdentifier(env, identifier, corsHeaders) {
+  let user;
+
+  if (identifier.length === 12) {
+    // Aadhar number
+    user = await env.DB.prepare(
+      'SELECT * FROM users WHERE aadhar_id = ?'
+    ).bind(identifier).first();
+  } else if (identifier.length === 10) {
+    // Phone number
+    user = await env.DB.prepare(
+      'SELECT * FROM users WHERE phone_number = ?'
+    ).bind(identifier).first();
+  } else {
+    return new Response(JSON.stringify({ error: 'Invalid identifier. Use 12-digit Aadhar or 10-digit phone.' }), {
+      status: 400,
+      headers: corsHeaders
+    });
+  }
+
+  if (!user) {
+    return new Response(JSON.stringify({ error: 'User not found' }), {
+      status: 404,
+      headers: corsHeaders
+    });
+  }
+
+  return new Response(JSON.stringify(user), { headers: corsHeaders });
+}
+
+// Create new user
+async function createUser(env, data, corsHeaders) {
+  const { name, aadhar_id, phone_number, photo_url, credit_score } = data;
+
+  if (!name || !aadhar_id || !phone_number) {
+    return new Response(JSON.stringify({ error: 'Missing required fields: name, aadhar_id, phone_number' }), {
+      status: 400,
+      headers: corsHeaders
+    });
+  }
+
+  try {
+    const result = await env.DB.prepare(
+      'INSERT INTO users (name, aadhar_id, phone_number, photo_url, credit_score) VALUES (?, ?, ?, ?, ?)'
+    ).bind(name, aadhar_id, phone_number, photo_url || null, credit_score || null).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      id: result.meta.last_row_id,
+      message: 'User created successfully'
+    }), { headers: corsHeaders });
+  } catch (error) {
+    if (error.message.includes('UNIQUE constraint')) {
+      return new Response(JSON.stringify({ error: 'User with this Aadhar or phone already exists' }), {
+        status: 409,
+        headers: corsHeaders
+      });
+    }
+    throw error;
+  }
+}
+
+// Get verification logs
+async function getLogs(env, limit, corsHeaders) {
+  const result = await env.DB.prepare(
+    'SELECT * FROM verification_logs ORDER BY created_at DESC LIMIT ?'
+  ).bind(limit).all();
+
+  return new Response(JSON.stringify(result.results), { headers: corsHeaders });
+}
+
+// Create verification log
+async function createLog(env, data, corsHeaders) {
+  const { userName, aadhar, phone, status, confidenceScore, identityType } = data;
+
+  // Find user_id if aadhar matches
+  let userId = null;
+  if (aadhar && !aadhar.includes('X')) {
+    const user = await env.DB.prepare('SELECT id FROM users WHERE aadhar_id = ?').bind(aadhar).first();
+    if (user) userId = user.id;
+  }
+
+  await env.DB.prepare(`
+    INSERT INTO verification_logs 
+    (user_id, user_name, aadhar_masked, phone_masked, status, confidence_score, identity_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    userId,
+    userName || 'Unknown',
+    aadhar || 'N/A',
+    phone || 'N/A',
+    status || 'unknown',
+    confidenceScore || null,
+    identityType || 'unknown'
+  ).run();
+
+  return new Response(JSON.stringify({ success: true, message: 'Log created' }), { headers: corsHeaders });
+}
+
+// Clear all logs
+async function clearLogs(env, corsHeaders) {
+  await env.DB.prepare('DELETE FROM verification_logs').run();
+  return new Response(JSON.stringify({ success: true, message: 'All logs cleared' }), { headers: corsHeaders });
+}
+
+// Get verification stats
+async function getStats(env, corsHeaders) {
+  const total = await env.DB.prepare('SELECT COUNT(*) as count FROM verification_logs').first();
+  const success = await env.DB.prepare("SELECT COUNT(*) as count FROM verification_logs WHERE status = 'success'").first();
+  const failed = await env.DB.prepare("SELECT COUNT(*) as count FROM verification_logs WHERE status = 'failed'").first();
+
+  return new Response(JSON.stringify({
+    total: total.count,
+    successful: success.count,
+    failed: failed.count
+  }), { headers: corsHeaders });
 }

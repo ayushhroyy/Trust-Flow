@@ -533,10 +533,15 @@ async function addUser() {
 }
 
 // =============================================
-// Dashboard Functions - Login History & Confidence Scores
+// Dashboard Functions - D1 Database Integration
 // =============================================
 
-const STORAGE_KEY = 'trustflow_verification_history';
+// API base URL - change to your deployed worker URL in production
+const API_BASE_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:8787'  // Wrangler dev server
+    : '';  // Same origin in production
+
+const STORAGE_KEY = 'trustflow_verification_history'; // Fallback for localStorage
 
 function maskAadhar(aadhar) {
     if (!aadhar || aadhar === 'N/A') return 'N/A';
@@ -554,7 +559,22 @@ function maskPhone(phone) {
     return phone;
 }
 
-function getVerificationHistory() {
+// Fetch verification history from D1 API
+async function getVerificationHistoryFromAPI() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/logs?limit=100`);
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (error) {
+        console.warn('API not available, falling back to localStorage:', error);
+    }
+    // Fallback to localStorage
+    return getVerificationHistoryLocal();
+}
+
+// localStorage fallback
+function getVerificationHistoryLocal() {
     try {
         const data = localStorage.getItem(STORAGE_KEY);
         return data ? JSON.parse(data) : [];
@@ -564,7 +584,7 @@ function getVerificationHistory() {
     }
 }
 
-function saveVerificationHistory(history) {
+function saveVerificationHistoryLocal(history) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
     } catch (error) {
@@ -572,12 +592,9 @@ function saveVerificationHistory(history) {
     }
 }
 
-function logVerificationEvent(userData, success, confidenceScore) {
-    const history = getVerificationHistory();
-
+// Log verification event to D1 API
+async function logVerificationEvent(userData, success, confidenceScore) {
     const event = {
-        id: Date.now(),
-        timestamp: new Date().toISOString(),
         userName: userData.userName || 'Unknown',
         aadhar: maskAadhar(userData.aadhar),
         phone: maskPhone(userData.phone),
@@ -586,25 +603,51 @@ function logVerificationEvent(userData, success, confidenceScore) {
         identityType: userData.identityType || 'unknown'
     };
 
-    // Add to beginning of array (newest first)
-    history.unshift(event);
-
-    // Keep only last 100 entries
-    if (history.length > 100) {
-        history.pop();
+    // Try API first
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/logs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(event)
+        });
+        if (response.ok) {
+            console.log('Verification event logged to D1:', event);
+            return;
+        }
+    } catch (error) {
+        console.warn('API not available, saving to localStorage:', error);
     }
 
-    saveVerificationHistory(history);
-    console.log('Verification event logged:', event);
+    // Fallback to localStorage
+    const history = getVerificationHistoryLocal();
+    const localEvent = {
+        id: Date.now(),
+        timestamp: new Date().toISOString(),
+        ...event
+    };
+    history.unshift(localEvent);
+    if (history.length > 100) history.pop();
+    saveVerificationHistoryLocal(history);
+    console.log('Verification event logged to localStorage:', localEvent);
 }
 
-function getVerificationStats() {
-    const history = getVerificationHistory();
-    const total = history.length;
-    const successful = history.filter(e => e.status === 'success').length;
-    const failed = history.filter(e => e.status === 'failed').length;
-
-    return { total, successful, failed };
+// Get stats from D1 API
+async function getVerificationStatsFromAPI() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/stats`);
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (error) {
+        console.warn('API not available, calculating from localStorage:', error);
+    }
+    // Fallback
+    const history = getVerificationHistoryLocal();
+    return {
+        total: history.length,
+        successful: history.filter(e => e.status === 'success').length,
+        failed: history.filter(e => e.status === 'failed').length
+    };
 }
 
 function formatTimestamp(isoString) {
@@ -635,9 +678,16 @@ function getConfidenceClass(score) {
     return 'low';
 }
 
-function populateDashboard() {
-    const stats = getVerificationStats();
-    const history = getVerificationHistory();
+async function populateDashboard() {
+    // Show loading state
+    document.getElementById('totalVerifications').textContent = '...';
+    document.getElementById('successCount').textContent = '...';
+    document.getElementById('failedCount').textContent = '...';
+
+    const [stats, history] = await Promise.all([
+        getVerificationStatsFromAPI(),
+        getVerificationHistoryFromAPI()
+    ]);
 
     // Update stats
     document.getElementById('totalVerifications').textContent = stats.total;
@@ -647,7 +697,7 @@ function populateDashboard() {
     // Update table
     const tableBody = document.getElementById('historyTableBody');
 
-    if (history.length === 0) {
+    if (!history || history.length === 0) {
         tableBody.innerHTML = `
             <tr class="empty-row">
                 <td colspan="5">No verification history yet</td>
@@ -659,14 +709,18 @@ function populateDashboard() {
     tableBody.innerHTML = history.map(event => {
         const statusClass = event.status === 'success' ? 'success' : 'failed';
         const statusText = event.status === 'success' ? 'Success' : 'Failed';
-        const confidenceClass = getConfidenceClass(event.confidenceScore);
-        const confidenceText = event.confidenceScore !== null ? `${event.confidenceScore}%` : 'N/A';
+        const confidence = event.confidence_score || event.confidenceScore;
+        const confidenceClass = getConfidenceClass(confidence);
+        const confidenceText = confidence !== null && confidence !== undefined ? `${confidence}%` : 'N/A';
+        const timestamp = event.created_at || event.timestamp;
+        const aadhar = event.aadhar_masked || event.aadhar;
+        const userName = event.user_name || event.userName;
 
         return `
             <tr>
-                <td>${formatTimestamp(event.timestamp)}</td>
-                <td>${event.userName}</td>
-                <td>${event.aadhar}</td>
+                <td>${formatTimestamp(timestamp)}</td>
+                <td>${userName}</td>
+                <td>${aadhar}</td>
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                 <td><span class="confidence-badge ${confidenceClass}">${confidenceText}</span></td>
             </tr>
@@ -674,11 +728,24 @@ function populateDashboard() {
     }).join('');
 }
 
-function clearLoginHistory() {
+async function clearLoginHistory() {
     if (confirm('Are you sure you want to clear all verification history? This action cannot be undone.')) {
+        // Try API first
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/logs`, { method: 'DELETE' });
+            if (response.ok) {
+                console.log('Verification history cleared from D1');
+                await populateDashboard();
+                return;
+            }
+        } catch (error) {
+            console.warn('API not available, clearing localStorage:', error);
+        }
+
+        // Fallback
         localStorage.removeItem(STORAGE_KEY);
-        populateDashboard();
-        console.log('Verification history cleared');
+        await populateDashboard();
+        console.log('Verification history cleared from localStorage');
     }
 }
 

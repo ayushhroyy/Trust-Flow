@@ -1,0 +1,12 @@
+name = "trustflow-worker"
+main = "cf-worker.js"
+compatibility_date = "2024-01-01"
+
+# Static assets (HTML, CSS, JS, images)
+[assets]
+directory = "./"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "trustflow-db"
+database_id = "REPLACE_WITH_YOUR_DATABASE_ID"
