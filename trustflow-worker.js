@@ -1,4 +1,4 @@
-// TrustFlow Worker API - Cloudflare D1 + R2 Backend
+// Securify Worker API - Cloudflare D1 + R2 Backend
 // Handles user management, image storage, and verification logging
 
 export default {
@@ -63,7 +63,7 @@ export default {
             // API documentation for GET /
             if (path === '/' && request.method === 'GET') {
                 return new Response(JSON.stringify({
-                    service: 'TrustFlow API',
+                    service: 'Securify API',
                     version: '1.0.0',
                     endpoints: {
                         'GET /api/users': 'List all users',
