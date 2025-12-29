@@ -390,6 +390,9 @@ async function scanAadharCard(request, env, corsHeaders) {
                             type: 'text',
                             text: `Please extract the FULL NAME and 12-digit AADHAR NUMBER from this Aadhar card image.
 
+IMPORTANT: The Aadhar number is located at the BOTTOM of the card and appears in groups of 4 digits like: XXXX XXXX XXXX or XXXX-XXXX-XXXX
+You MUST remove ALL spaces and dashes from the number to return exactly 12 consecutive digits.
+
 Return your answer in this JSON format:
 {
   "name": "FULL NAME",
@@ -398,12 +401,14 @@ Return your answer in this JSON format:
 
 Rules:
 - name: Extract the complete name as written (uppercase preferred)
-- aadhar: The 12-digit number only, no spaces or dashes
+- aadhar: Look at the BOTTOM of the card for the 12-digit number. It appears as "XXXX XXXX XXXX" or "XXXX-XXXX-XXXX". Remove ALL spaces and dashes and return exactly 12 consecutive digits.
 - If you cannot find a field, use "NOT_FOUND"
 - Return ONLY the JSON, nothing else
 
-Example response:
-{"name": "RAJESH KUMAR SHARMA", "aadhar": "123456789012"}`
+Example valid response:
+{"name": "RAJESH KUMAR SHARMA", "aadhar": "123456789012"}
+
+Note: If you see "1234 5678 9012" or "1234-5678-9012", return "123456789012"`
                         },
                         {
                             type: 'image_url',
