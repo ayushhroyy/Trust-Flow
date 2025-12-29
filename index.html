@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustFlow - Identity Verification</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+</head>
+<body>
+    <div class="logo">TrustFlow</div>
+
+    <div class="container">
+        <!-- Welcome Screen -->
+        <div class="screen active" id="welcomeScreen">
+            <div class="glass-card">
+                <h1 class="greeting-text">Welcome to TrustFlow</h1>
+                <p class="subtext">Secure Identity Verification System</p>
+                <div class="action-buttons">
+                    <button class="glow-button" onclick="goToVerification()">
+                        <span>Verify Identity</span>
+                    </button>
+                    <button class="secondary-button" onclick="goToAdmin()">
+                        <span>Manage Database</span>
+                    </button>
+                    <button class="secondary-button dashboard-btn" onclick="goToDashboard()">
+                        <span>📊 View Dashboard</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Verification Input Screen -->
+        <div class="screen" id="inputScreen">
+            <div class="glass-card">
+                <h2 class="screen-title">Enter Your Details</h2>
+                <div class="status-badge">Step 1 of 2</div>
+                
+                <div class="input-group">
+                    <label class="input-label">Aadhar Number or Phone Number</label>
+                    <input
+                        type="tel"
+                        class="glass-input"
+                        id="identityInput"
+                        placeholder="Enter Aadhar (12 digits) or Phone (10 digits)"
+                    >
+                </div>
+                
+                <button class="glow-button" onclick="submitIdentity()">
+                    <span>Continue</span>
+                </button>
+                <button class="back-button" onclick="goBack('inputScreen', 'welcomeScreen')">
+                    <span>Back</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Face Verification Screen -->
+        <div class="screen" id="faceScreen">
+            <div class="glass-card">
+                <h2 class="screen-title">Face Verification</h2>
+                <div class="status-badge">Step 2 of 2</div>
+                <p class="instruction-text">Position your face in the frame</p>
+                
+                <div class="main-content">
+                    <div class="upload-container">
+                        <h3>Reference Image</h3>
+                        <div id="referenceImageContainer">
+                            <img id="referenceImage" src="" alt="Reference image preview">
+                        </div>
+                    </div>
+                    
+                    <div class="video-container">
+                        <h3>Live Webcam</h3>
+                        <div id="video-wrapper">
+                            <video id="video" autoplay muted playsinline></video>
+                        </div>
+                        <button class="glow-button" id="startWebcamButton" disabled>
+                            <span>Start Webcam</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="status">Loading face recognition models...</div>
+                
+                <div class="verification-progress" id="verificationProgress" style="display: none;">
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <div class="progress-dots">
+                            <span class="dot" id="dot1"></span>
+                            <span class="dot" id="dot2"></span>
+                            <span class="dot" id="dot3"></span>
+                            <span class="dot" id="dot4"></span>
+                            <span class="dot" id="dot5"></span>
+                        </div>
+                    </div>
+                    <div class="progress-text" id="progressText">Verifying...</div>
+                </div>
+
+                <div class="timeout-progress" id="timeoutProgress" style="display: none;">
+                    <div class="timeout-bar">
+                        <div class="timeout-fill" id="timeoutFill"></div>
+                    </div>
+                    <div class="timeout-text" id="timeoutText">Time remaining: 6s</div>
+                </div>
+
+                <div class="button-group">
+                    <button class="back-button" onclick="goBack('faceScreen', 'inputScreen')">
+                        <span>Back</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Screen -->
+        <div class="screen" id="successScreen">
+            <div class="glass-card">
+                <div class="success-icon">✓</div>
+                <h2 class="screen-title">Verification Successful!</h2>
+                <p class="subtext" id="verifiedUser">You have been verified</p>
+                <button class="glow-button" onclick="goToVerification()">
+                    <span>Verify Another Identity</span>
+                </button>
+                <button class="back-button" onclick="goBack('successScreen', 'welcomeScreen')">
+                    <span>Back to Home</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Admin Screen -->
+        <div class="screen" id="adminScreen">
+            <div class="glass-card">
+                <h2 class="screen-title">Manage Database</h2>
+                <p class="subtext">Add a new person to the verification database</p>
+                
+                <div class="input-group">
+                    <label class="input-label">Name</label>
+                    <input type="text" class="glass-input" id="adminName" placeholder="Full Name">
+                </div>
+                
+                <div class="input-group">
+                    <label class="input-label">Aadhar Number</label>
+                    <input type="tel" class="glass-input" id="adminAadhar" placeholder="12-digit Aadhar Number" maxlength="12">
+                </div>
+                
+                <div class="input-group">
+                    <label class="input-label">Phone Number</label>
+                    <input type="tel" class="glass-input" id="adminPhone" placeholder="10-digit Phone Number" maxlength="10">
+                </div>
+                
+                <div class="input-group">
+                    <label class="input-label">Upload Photo</label>
+                    <input type="file" class="glass-input" id="adminPhoto" accept="image/*">
+                    <div id="photoPreview" class="photo-preview"></div>
+                </div>
+                
+                <button class="glow-button" onclick="addUser()">
+                    <span>Add to Database</span>
+                </button>
+                <button class="back-button" onclick="goBack('adminScreen', 'welcomeScreen')">
+                    <span>Back</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard Screen -->
+        <div class="screen" id="dashboardScreen">
+            <div class="glass-card dashboard-card">
+                <h2 class="screen-title">Verification Dashboard</h2>
+                <p class="subtext">Login history and confidence scores</p>
+                
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">📋</div>
+                        <div class="stat-value" id="totalVerifications">0</div>
+                        <div class="stat-label">Total Verifications</div>
+                    </div>
+                    <div class="stat-card success">
+                        <div class="stat-icon">✓</div>
+                        <div class="stat-value" id="successCount">0</div>
+                        <div class="stat-label">Successful</div>
+                    </div>
+                    <div class="stat-card failed">
+                        <div class="stat-icon">✗</div>
+                        <div class="stat-value" id="failedCount">0</div>
+                        <div class="stat-label">Failed</div>
+                    </div>
+                </div>
+                
+                <!-- Login History Table -->
+                <div class="table-container">
+                    <h3 class="table-title">Recent Verifications</h3>
+                    <div class="table-wrapper">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Date/Time</th>
+                                    <th>User</th>
+                                    <th>Aadhar</th>
+                                    <th>Status</th>
+                                    <th>Confidence</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                <tr class="empty-row">
+                                    <td colspan="5">No verification history yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="dashboard-actions">
+                    <button class="danger-button" onclick="clearLoginHistory()">
+                        <span>🗑️ Clear History</span>
+                    </button>
+                    <button class="back-button" onclick="goBack('dashboardScreen', 'welcomeScreen')">
+                        <span>Back to Home</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

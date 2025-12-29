@@ -1,0 +1,28 @@
+[
+  {
+    "id": 2,
+    "name": "Aryan Singh",
+    "username": "aryan_adhaar",
+    "credit_score": 820,
+    "pan_id": "STJP1378D",
+    "adhaar_id": "449961503595",
+    "aadhar_id": "449961503595",
+    "phone_number": "7499853367"
+  },
+  {
+    "id": 3,
+    "name": "Navya Aggarwal",
+    "username": "navya_aggarwal",
+    "adhaar_id": "530785223307",
+    "aadhar_id": "530785223307",
+    "phone_number": "9315186262"
+  },
+  {
+    "id": 4,
+    "name": "Anjali",
+    "username": "anjali",
+    "adhaar_id": "661813090329",
+    "aadhar_id": "661813090329",
+    "phone_number": "7818093783"
+  }
+]
