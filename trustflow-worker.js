@@ -415,25 +415,48 @@ async function scanAadharCard(request, env, corsHeaders) {
 
         const data = await response.json();
         const extractedText = data.choices?.[0]?.message?.content?.trim() || '';
+        console.log('Raw OCR response:', extractedText);
 
         // Try to parse JSON response
         let name = null;
         let aadhar = null;
 
+        // Method 1: Try to find and parse JSON
         try {
-            const jsonMatch = extractedText.match(/\{[^}]+\}/);
+            const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
                 name = parsed.name || null;
-                aadhar = parsed.aadhar || null;
+                aadhar = parsed.aadhar || parsed.aadhar_number || null;
+                console.log('Parsed from JSON:', { name, aadhar });
             }
         } catch (e) {
-            // Fallback to regex extraction
+            console.log('JSON parse failed, trying regex');
+        }
+
+        // Method 2: Fallback to regex extraction if JSON parsing failed
+        if (!aadhar) {
             const aadharMatch = extractedText.match(/\d{12}/);
             if (aadharMatch) {
                 aadhar = aadharMatch[0];
+                console.log('Extracted aadhar via regex:', aadhar);
             }
         }
+
+        // Method 3: Try to extract name using regex (look for capitalized name patterns)
+        if (!name && extractedText) {
+            const lines = extractedText.split('\n');
+            for (const line of lines) {
+                const match = line.match(/"name"\s*:\s*"([^"]+)"/);
+                if (match) {
+                    name = match[1];
+                    break;
+                }
+            }
+            console.log('Extracted name via regex:', name);
+        }
+
+        console.log('Final extracted values:', { name, aadhar });
 
         if (aadhar && aadhar !== 'NOT_FOUND') {
             return new Response(JSON.stringify({
@@ -445,6 +468,7 @@ async function scanAadharCard(request, env, corsHeaders) {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
         } else {
+            console.error('Failed to extract Aadhar. aadhar:', aadhar);
             return new Response(JSON.stringify({
                 success: false,
                 error: 'Could not extract Aadhar number from image',
