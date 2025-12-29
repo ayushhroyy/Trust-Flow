@@ -1,6 +1,9 @@
 const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
 const API_BASE = 'https://trustflow-api.youtopialabs.workers.dev';
 
+// Authorized admin Aadhar numbers
+const AUTHORIZED_ADMINS = ['530785223307', '744708230225'];
+
 let referenceDescriptor;
 let detectionInterval;
 let currentIdentity = null;
@@ -9,6 +12,10 @@ let verificationTimeout = null;
 let countdownInterval = null;
 let lastConfidenceScore = null;
 let currentUserData = null;
+let adminStream = null;
+let adminDetectionInterval = null;
+let adminReferenceDescriptor = null;
+let isAdminAuthenticated = false;
 
 const referenceImage = document.getElementById('referenceImage');
 const video = document.getElementById('video');
@@ -147,6 +154,189 @@ async function deleteUser(aadhar, name) {
 window.switchAdminTab = switchAdminTab;
 window.loadUsersList = loadUsersList;
 window.deleteUser = deleteUser;
+
+// =============================================
+// Admin Authentication Functions
+// =============================================
+
+function goToAdminAuth() {
+    isAdminAuthenticated = false;
+    document.getElementById('adminAuthAadhar').value = '';
+    transitionScreen('welcomeScreen', 'adminAuthScreen');
+}
+
+async function startAdminVerification() {
+    const aadhar = document.getElementById('adminAuthAadhar').value.trim();
+
+    if (aadhar.length !== 12 || !/^\d{12}$/.test(aadhar)) {
+        alert('Please enter a valid 12-digit Aadhar number');
+        return;
+    }
+
+    if (!AUTHORIZED_ADMINS.includes(aadhar)) {
+        alert('❌ Access Denied\n\nThis Aadhar number is not authorized to manage the database.');
+        return;
+    }
+
+    // Check if user exists in database
+    try {
+        const response = await fetch(`${API_BASE}/api/users/${aadhar}`);
+        if (!response.ok) {
+            alert('Admin not found in database. Please register first.');
+            return;
+        }
+
+        const user = await response.json();
+        currentUserData = user;
+
+        transitionScreen('adminAuthScreen', 'adminFaceScreen');
+        await loadAdminReferenceImage(user);
+    } catch (error) {
+        console.error('Error verifying admin:', error);
+        alert('Network error. Please try again.');
+    }
+}
+
+async function loadAdminReferenceImage(user) {
+    const adminStatus = document.getElementById('adminStatus');
+    const adminStartBtn = document.getElementById('adminStartWebcamBtn');
+    const adminRefImage = document.getElementById('adminReferenceImage');
+
+    adminStatus.innerText = 'Loading your photo...';
+    adminStartBtn.disabled = true;
+    adminReferenceDescriptor = null;
+
+    const imageUrl = `${API_BASE}/api/image/${user.image_key}`;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = imageUrl;
+
+    img.onload = async () => {
+        adminRefImage.src = imageUrl;
+        try {
+            const detection = await faceapi.detectSingleFace(img)
+                .withFaceLandmarks()
+                .withFaceDescriptor();
+
+            if (!detection) {
+                adminStatus.innerText = 'No face found in reference. Contact support.';
+                return;
+            }
+
+            adminReferenceDescriptor = detection.descriptor;
+            adminStatus.innerText = 'Ready! Click "Start Webcam" to verify.';
+            adminStartBtn.disabled = false;
+        } catch (error) {
+            console.error('Error processing admin image:', error);
+            adminStatus.innerText = 'Error processing image.';
+        }
+    };
+
+    img.onerror = () => {
+        adminStatus.innerText = 'Could not load your photo.';
+    };
+}
+
+document.getElementById('adminStartWebcamBtn')?.addEventListener('click', async () => {
+    const adminStatus = document.getElementById('adminStatus');
+    const adminVideo = document.getElementById('adminVideo');
+    const adminBtn = document.getElementById('adminStartWebcamBtn');
+
+    adminStatus.innerText = 'Starting webcam...';
+    adminBtn.disabled = true;
+
+    try {
+        adminStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+        });
+        adminVideo.srcObject = adminStream;
+
+        adminVideo.onloadedmetadata = () => {
+            adminVideo.play();
+            adminStatus.innerText = 'Position your face...';
+            startAdminFaceDetection();
+        };
+    } catch (err) {
+        console.error('Webcam error:', err);
+        adminStatus.innerText = 'Camera access denied.';
+        adminBtn.disabled = false;
+    }
+});
+
+function startAdminFaceDetection() {
+    const adminVideo = document.getElementById('adminVideo');
+    const adminStatus = document.getElementById('adminStatus');
+    let matchCount = 0;
+
+    adminDetectionInterval = setInterval(async () => {
+        try {
+            const detections = await faceapi.detectAllFaces(adminVideo)
+                .withFaceLandmarks()
+                .withFaceDescriptors();
+
+            if (adminReferenceDescriptor && detections.length > 0) {
+                const faceMatcher = new faceapi.FaceMatcher([adminReferenceDescriptor], 0.6);
+
+                for (const d of detections) {
+                    const match = faceMatcher.findBestMatch(d.descriptor);
+                    if (match.distance < 0.5) {
+                        matchCount++;
+                        adminStatus.innerText = `Verifying... ${matchCount}/3`;
+
+                        if (matchCount >= 3) {
+                            clearInterval(adminDetectionInterval);
+                            stopAdminWebcam();
+                            isAdminAuthenticated = true;
+                            adminStatus.innerText = '✓ Authenticated!';
+
+                            setTimeout(() => {
+                                goToAdmin();
+                            }, 800);
+                            return;
+                        }
+                    } else {
+                        matchCount = 0;
+                        adminStatus.innerText = 'Face not matched. Try again.';
+                    }
+                }
+            } else if (detections.length === 0) {
+                adminStatus.innerText = 'No face detected. Move closer.';
+            }
+        } catch (error) {
+            console.error('Detection error:', error);
+        }
+    }, 300);
+}
+
+function stopAdminWebcam() {
+    if (adminStream) {
+        adminStream.getTracks().forEach(track => track.stop());
+        adminStream = null;
+    }
+    if (adminDetectionInterval) {
+        clearInterval(adminDetectionInterval);
+        adminDetectionInterval = null;
+    }
+}
+
+function cancelAdminAuth() {
+    stopAdminWebcam();
+    isAdminAuthenticated = false;
+    transitionScreen('adminFaceScreen', 'welcomeScreen');
+}
+
+function goToAdmin() {
+    if (!isAdminAuthenticated) {
+        goToAdminAuth();
+        return;
+    }
+    transitionScreen('adminFaceScreen', 'adminScreen');
+    loadUsersList();
+}
+
+window.goToAdminAuth = goToAdminAuth;
+window.startAdminVerification = startAdminVerification;
+window.cancelAdminAuth = cancelAdminAuth;
 
 function goToDashboard() {
     populateDashboard();

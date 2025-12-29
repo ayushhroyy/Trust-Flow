@@ -97,6 +97,42 @@ body {
     margin-bottom: 16px;
 }
 
+.status-badge.warning {
+    background: rgba(234, 179, 8, 0.15);
+    color: #eab308;
+    border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+#adminReferenceContainer {
+    width: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #333;
+    background: #1a1a1a;
+}
+
+#adminReferenceImage {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+#admin-video-wrapper {
+    position: relative;
+    width: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #333;
+    background: #1a1a1a;
+    aspect-ratio: 4/3;
+}
+
+#adminVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
 .input-group {
     margin-bottom: 16px;
 }

@@ -23,13 +23,69 @@
                     <button class="glow-button" onclick="goToVerification()">
                         <span>Verify Identity</span>
                     </button>
-                    <button class="secondary-button" onclick="goToAdmin()">
-                        <span>Manage Database</span>
+                    <button class="secondary-button" onclick="goToAdminAuth()">
+                        <span>🔐 Manage Database</span>
                     </button>
                     <button class="secondary-button dashboard-btn" onclick="goToDashboard()">
                         <span>📊 View Dashboard</span>
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Admin Auth Screen -->
+        <div class="screen" id="adminAuthScreen">
+            <div class="glass-card">
+                <h2 class="screen-title">🔐 Admin Authentication</h2>
+                <div class="status-badge warning">Restricted Access</div>
+                <p class="subtext">Only authorized administrators can manage the database</p>
+
+                <div class="input-group">
+                    <label class="input-label">Admin Aadhar Number</label>
+                    <input type="tel" class="glass-input" id="adminAuthAadhar" placeholder="Enter your 12-digit Aadhar"
+                        maxlength="12">
+                </div>
+
+                <button class="glow-button" onclick="startAdminVerification()">
+                    <span>Verify & Continue</span>
+                </button>
+                <button class="back-button" onclick="goBack('adminAuthScreen', 'welcomeScreen')">
+                    <span>Back</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Admin Face Verification Screen -->
+        <div class="screen" id="adminFaceScreen">
+            <div class="glass-card">
+                <h2 class="screen-title">Admin Face Verification</h2>
+                <div class="status-badge warning">Security Check</div>
+                <p class="instruction-text">Position your face in the frame to authenticate</p>
+
+                <div class="main-content">
+                    <div class="upload-container">
+                        <h3>Your Photo</h3>
+                        <div id="adminReferenceContainer">
+                            <img id="adminReferenceImage" src="" alt="Admin reference">
+                        </div>
+                    </div>
+
+                    <div class="video-container">
+                        <h3>Live Webcam</h3>
+                        <div id="admin-video-wrapper">
+                            <video id="adminVideo" autoplay muted playsinline></video>
+                        </div>
+                        <button class="glow-button" id="adminStartWebcamBtn" disabled>
+                            <span>Start Webcam</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="adminStatus">Loading...</div>
+
+                <button class="back-button" onclick="cancelAdminAuth()">
+                    <span>Cancel</span>
+                </button>
             </div>
         </div>
 
