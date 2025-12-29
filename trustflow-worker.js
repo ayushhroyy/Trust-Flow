@@ -372,7 +372,7 @@ async function scanAadharCard(request, env, corsHeaders) {
         console.log('Base64 image length:', base64Image.length, 'characters');
 
         // Call OpenRouter API with GLM model
-        console.log('Making API request to OpenRouter...');
+        console.log('Making API request to OpenRouter with model: google/gemini-2.5-flash...');
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -382,7 +382,7 @@ async function scanAadharCard(request, env, corsHeaders) {
                 'X-Title': 'Securify Aadhar Scanner'
             },
                 body: JSON.stringify({
-                model: 'z-ai/glm-4.6v',
+                model: 'google/gemini-2.5-flash',
                 messages: [{
                     role: 'user',
                     content: [
