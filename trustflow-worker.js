@@ -390,10 +390,11 @@ async function scanAadharCard(request, env, corsHeaders) {
                             type: 'text',
                             text: `Extract the FULL NAME and 12-digit AADHAR NUMBER from this Aadhar card image.
 
-IMPORTANT: The Aadhar number is located at the BOTTOM of the card and appears in groups of 4 digits like: XXXX XXXX XXXX or XXXX-XXXX-XXXX
-You MUST remove ALL spaces and dashes from the number to return exactly 12 consecutive digits.
+IMPORTANT: The Aadhar number is usually located at the BOTTOM of the card.
+It is 12 digits in GROUPS OF 3 like: 7447 0823 0225 (three groups separated by spaces)
+Your task: Find the 12-digit Aadhar number and report it WITHOUT ANY SPACES.
 
-DO NOT return "NOT_FOUND" for the aadhar number. Instead, search the entire image for ANY 12-digit number and return it. Even if you're not 100% sure it's the Aadhar number, return the best 12-digit number you can find.
+DO NOT return "NOT_FOUND" for the aadhar number. Search the entire image for ANY 12-digit number pattern and return it.
 
 Return your answer in this JSON format:
 {
@@ -403,7 +404,7 @@ Return your answer in this JSON format:
 
 Rules:
 - name: Extract the complete name as written (uppercase preferred)
-- aadhar: Look at the BOTTOM of the card for the 12-digit number. It appears as "XXXX XXXX XXXX" or "XXXX-XXXX-XXXX". Remove ALL spaces and dashes and return exactly 12 consecutive digits.
+- aadhar: Look at the BOTTOM of the card for the 12-digit number. It appears as three groups of 4 digits with spaces like "7447 0823 0225". Find it and return as exactly 12 consecutive digits with NO SPACES.
 - CRITICAL: Never return "NOT_FOUND" for aadhar. Always try to extract a 12-digit number from the image.
 - If you truly cannot find any 12-digit number, return an empty string "" for aadhar.
 - Return ONLY the JSON, nothing else
@@ -411,7 +412,7 @@ Rules:
 Example valid response:
 {"name": "RAJESH KUMAR SHARMA", "aadhar": "123456789012"}
 
-Note: If you see "1234 5678 9012" or "1234-5678-9012", return "123456789012"`
+Note: If you see "7447 0823 0225" or "7447-0823-0225", return "744708230225"`
                         },
                         {
                             type: 'image_url',
