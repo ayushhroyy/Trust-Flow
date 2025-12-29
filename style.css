@@ -503,8 +503,10 @@ body {
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+    gap: 16px;
     margin: 20px 0;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .stat-card {
@@ -550,6 +552,8 @@ body {
     justify-content: space-between;
     align-items: flex-start;
     margin-bottom: 12px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .stat-icon-wrapper {
@@ -560,6 +564,7 @@ body {
     align-items: center;
     justify-content: center;
     background: rgba(255, 255, 255, 0.05);
+    flex-shrink: 0;
 }
 
 .stat-icon-wrapper.total {
@@ -619,8 +624,10 @@ body {
     font-size: 32px;
     font-weight: 700;
     color: #fff;
-    margin-bottom: 2px;
-    line-height: 1;
+    margin-bottom: 4px;
+    line-height: 1.2;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .stat-label {
@@ -628,6 +635,8 @@ body {
     color: #666;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    line-height: 1.2;
+    word-break: break-word;
 }
 
 /* History Section */
@@ -685,6 +694,7 @@ body {
     padding: 14px 16px;
     border-bottom: 1px solid #252525;
     transition: background 0.15s;
+    box-sizing: border-box;
 }
 
 .history-item:last-child {
@@ -696,14 +706,15 @@ body {
 }
 
 .history-avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 16px;
     flex-shrink: 0;
+    box-sizing: border-box;
 }
 
 .history-avatar.success {
@@ -717,13 +728,20 @@ body {
 .history-info {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    box-sizing: border-box;
 }
 
 .history-name {
     font-size: 14px;
     font-weight: 500;
     color: #fff;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
+    line-height: 1.3;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .history-meta {
@@ -732,6 +750,7 @@ body {
     display: flex;
     gap: 8px;
     align-items: center;
+    line-height: 1.2;
 }
 
 .history-aadhar {
@@ -746,12 +765,22 @@ body {
 .history-right {
     text-align: right;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
 }
 
 .history-confidence {
     font-size: 14px;
     font-weight: 600;
     margin-bottom: 2px;
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
 }
 
 .history-confidence.high {
@@ -774,6 +803,10 @@ body {
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+    display: inline-block;
 }
 
 .history-status.success {
@@ -788,6 +821,7 @@ body {
 .empty-state {
     padding: 48px 24px;
     text-align: center;
+    box-sizing: border-box;
 }
 
 .empty-icon {
@@ -1396,10 +1430,14 @@ body {
     justify-content: space-between;
     gap: 16px;
     margin: 20px 0;
+    width: 100%;
+    box-sizing: border-box;
+    flex-wrap: wrap;
 }
 
 .search-box {
     flex: 1;
+    min-width: 0;
     position: relative;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1408,6 +1446,7 @@ body {
     display: flex;
     align-items: center;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-sizing: border-box;
 }
 
 .search-box:focus-within {
