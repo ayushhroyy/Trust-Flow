@@ -766,14 +766,165 @@ document.getElementById('adminPhoto').addEventListener('change', function (e) {
     }
 });
 
+// =============================================
+// Aadhar Scanner Functions
+// =============================================
+
+let addUserWebcamStream = null;
+let capturedPhotoBlob = null;
+
+function openAadharScanner() {
+    document.getElementById('aadharScannerModal').style.display = 'flex';
+    document.getElementById('scanPreview').innerHTML = '';
+    document.getElementById('scanningIndicator').style.display = 'none';
+}
+
+function closeAadharScanner() {
+    document.getElementById('aadharScannerModal').style.display = 'none';
+}
+
+async function processAadharCard(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const scanPreview = document.getElementById('scanPreview');
+    const scanningIndicator = document.getElementById('scanningIndicator');
+    const scanStatus = document.getElementById('scanStatus');
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        scanPreview.innerHTML = `<img src="${e.target.result}" alt="Aadhar card">`;
+    };
+    reader.readAsDataURL(file);
+
+    // Show scanning indicator
+    scanningIndicator.style.display = 'flex';
+
+    try {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const response = await fetch(`${API_BASE}/api/scan-aadhar`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success && result.aadhar_number) {
+            document.getElementById('adminAadhar').value = result.aadhar_number;
+            scanStatus.textContent = `✓ Extracted: ${result.aadhar_number}`;
+            scanStatus.className = 'scan-status';
+            closeAadharScanner();
+        } else {
+            scanStatus.textContent = `✗ ${result.error || 'Could not extract Aadhar'}`;
+            scanStatus.className = 'scan-status error';
+        }
+    } catch (error) {
+        console.error('Scan error:', error);
+        scanStatus.textContent = '✗ Scan failed. Try again.';
+        scanStatus.className = 'scan-status error';
+    } finally {
+        scanningIndicator.style.display = 'none';
+        input.value = ''; // Reset file input
+    }
+}
+
+function togglePhotoSource(source) {
+    const uploadSection = document.getElementById('uploadPhotoSection');
+    const webcamSection = document.getElementById('webcamPhotoSection');
+    const photoPreview = document.getElementById('photoPreview');
+
+    if (source === 'upload') {
+        uploadSection.style.display = 'block';
+        webcamSection.style.display = 'none';
+        stopAddUserWebcam();
+        capturedPhotoBlob = null;
+    } else {
+        uploadSection.style.display = 'none';
+        webcamSection.style.display = 'block';
+        startAddUserWebcam();
+    }
+    photoPreview.innerHTML = '';
+}
+
+async function startAddUserWebcam() {
+    try {
+        addUserWebcamStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+        });
+        document.getElementById('addUserVideo').srcObject = addUserWebcamStream;
+    } catch (err) {
+        console.error('Webcam error:', err);
+        alert('Could not access webcam');
+        document.querySelector('input[name="photoSource"][value="upload"]').checked = true;
+        togglePhotoSource('upload');
+    }
+}
+
+function stopAddUserWebcam() {
+    if (addUserWebcamStream) {
+        addUserWebcamStream.getTracks().forEach(track => track.stop());
+        addUserWebcamStream = null;
+    }
+}
+
+function captureWebcamPhoto() {
+    const video = document.getElementById('addUserVideo');
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+
+    canvas.toBlob((blob) => {
+        capturedPhotoBlob = blob;
+        const url = URL.createObjectURL(blob);
+        document.getElementById('photoPreview').innerHTML =
+            `<img src="${url}" alt="Captured photo">`;
+        stopAddUserWebcam();
+
+        // Show success message
+        const webcamSection = document.getElementById('webcamPhotoSection');
+        webcamSection.innerHTML = `
+            <p style="color: #10b981; text-align: center;">✓ Photo captured!</p>
+            <button class="secondary-button" onclick="retakePhoto()">
+                <span>🔄 Retake</span>
+            </button>
+        `;
+    }, 'image/jpeg', 0.9);
+}
+
+function retakePhoto() {
+    capturedPhotoBlob = null;
+    document.getElementById('photoPreview').innerHTML = '';
+    document.getElementById('webcamPhotoSection').innerHTML = `
+        <div id="addUserWebcamWrapper">
+            <video id="addUserVideo" autoplay muted playsinline></video>
+        </div>
+        <button class="secondary-button capture-btn" onclick="captureWebcamPhoto()">
+            <span>📸 Capture Photo</span>
+        </button>
+    `;
+    startAddUserWebcam();
+}
+
+window.openAadharScanner = openAadharScanner;
+window.closeAadharScanner = closeAadharScanner;
+window.processAadharCard = processAadharCard;
+window.togglePhotoSource = togglePhotoSource;
+window.captureWebcamPhoto = captureWebcamPhoto;
+window.retakePhoto = retakePhoto;
+
 async function addUser() {
     const name = document.getElementById('adminName').value.trim();
     const aadhar = document.getElementById('adminAadhar').value.trim();
     const phone = document.getElementById('adminPhone').value.trim();
     const photoInput = document.getElementById('adminPhoto');
+    const photoSource = document.querySelector('input[name="photoSource"]:checked')?.value || 'upload';
 
-    if (!name || !aadhar || !phone) {
-        alert('Please fill in all required fields');
+    if (!name || !aadhar) {
+        alert('Please fill in Name and Aadhar number');
         return;
     }
 
@@ -782,20 +933,30 @@ async function addUser() {
         return;
     }
 
-    if (phone.length !== 10 || !/^\d{10}$/.test(phone)) {
-        alert('Please enter a valid 10-digit phone number');
+    // Phone is optional, but validate if provided
+    if (phone && (phone.length !== 10 || !/^\d{10}$/.test(phone))) {
+        alert('Phone number must be 10 digits if provided');
         return;
     }
 
-    if (!photoInput.files || photoInput.files.length === 0) {
-        alert('Please upload a photo');
-        return;
+    // Get photo based on source
+    let photo;
+    if (photoSource === 'webcam') {
+        if (!capturedPhotoBlob) {
+            alert('Please capture a photo');
+            return;
+        }
+        photo = capturedPhotoBlob;
+    } else {
+        if (!photoInput.files || photoInput.files.length === 0) {
+            alert('Please upload a photo');
+            return;
+        }
+        photo = photoInput.files[0];
     }
-
-    const photo = photoInput.files[0];
 
     // Show loading state
-    const addButton = document.querySelector('#adminScreen .glow-button');
+    const addButton = document.querySelector('#addUserTab .glow-button');
     const originalText = addButton.querySelector('span').innerText;
     addButton.disabled = true;
     addButton.querySelector('span').innerText = 'Adding...';
@@ -804,7 +965,7 @@ async function addUser() {
         const formData = new FormData();
         formData.append('name', name);
         formData.append('aadhar_id', aadhar);
-        formData.append('phone_number', phone);
+        if (phone) formData.append('phone_number', phone);
         formData.append('image', photo);
 
         const response = await fetch(`${API_BASE}/api/users`, {
@@ -821,6 +982,12 @@ async function addUser() {
             document.getElementById('adminPhone').value = '';
             document.getElementById('adminPhoto').value = '';
             document.getElementById('photoPreview').innerHTML = '';
+            document.getElementById('scanStatus').textContent = '';
+            capturedPhotoBlob = null;
+
+            // Reset photo source to upload
+            document.querySelector('input[name="photoSource"][value="upload"]').checked = true;
+            togglePhotoSource('upload');
         } else {
             alert(`Error: ${result.error || 'Failed to add user'}`);
         }

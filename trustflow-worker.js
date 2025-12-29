@@ -60,11 +60,16 @@ export default {
                 return await clearVerifications(env, corsHeaders);
             }
 
+            // Aadhar card OCR endpoint
+            if (path === '/api/scan-aadhar' && request.method === 'POST') {
+                return await scanAadharCard(request, env, corsHeaders);
+            }
+
             // API documentation for GET /
             if (path === '/' && request.method === 'GET') {
                 return new Response(JSON.stringify({
                     service: 'Securify API',
-                    version: '1.0.0',
+                    version: '1.1.0',
                     endpoints: {
                         'GET /api/users': 'List all users',
                         'POST /api/users': 'Add new user (multipart/form-data with name, aadhar_id, phone_number, image)',
@@ -74,7 +79,8 @@ export default {
                         'GET /api/image/:key': 'Get user image',
                         'GET /api/verifications': 'Get verification history',
                         'POST /api/verifications': 'Log verification event',
-                        'DELETE /api/verifications': 'Clear all verifications'
+                        'DELETE /api/verifications': 'Clear all verifications',
+                        'POST /api/scan-aadhar': 'Extract Aadhar number from card image (multipart/form-data with image)'
                     }
                 }, null, 2), {
                     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -148,13 +154,13 @@ async function addUser(request, env, corsHeaders) {
 
     const name = formData.get('name');
     const aadhar_id = formData.get('aadhar_id');
-    const phone_number = formData.get('phone_number');
+    const phone_number = formData.get('phone_number') || null; // Optional
     const image = formData.get('image');
 
-    // Validation
-    if (!name || !aadhar_id || !phone_number || !image) {
+    // Validation - phone is now optional
+    if (!name || !aadhar_id || !image) {
         return new Response(JSON.stringify({
-            error: 'Missing required fields: name, aadhar_id, phone_number, image'
+            error: 'Missing required fields: name, aadhar_id, image'
         }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -168,20 +174,27 @@ async function addUser(request, env, corsHeaders) {
         });
     }
 
-    if (!/^\d{10}$/.test(phone_number)) {
-        return new Response(JSON.stringify({ error: 'Phone must be 10 digits' }), {
+    // Only validate phone if provided
+    if (phone_number && !/^\d{10}$/.test(phone_number)) {
+        return new Response(JSON.stringify({ error: 'Phone must be 10 digits if provided' }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
     }
 
-    // Check if user already exists
-    const existing = await env.DB.prepare(
-        'SELECT id FROM users WHERE aadhar_id = ? OR phone_number = ?'
-    ).bind(aadhar_id, phone_number).first();
+    // Check if user already exists (by aadhar, or by phone if provided)
+    let existingQuery = 'SELECT id FROM users WHERE aadhar_id = ?';
+    let existingParams = [aadhar_id];
+
+    if (phone_number) {
+        existingQuery = 'SELECT id FROM users WHERE aadhar_id = ? OR phone_number = ?';
+        existingParams = [aadhar_id, phone_number];
+    }
+
+    const existing = await env.DB.prepare(existingQuery).bind(...existingParams).first();
 
     if (existing) {
-        return new Response(JSON.stringify({ error: 'User with this Aadhar or phone already exists' }), {
+        return new Response(JSON.stringify({ error: 'User with this Aadhar already exists' }), {
             status: 409,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
@@ -328,4 +341,95 @@ async function clearVerifications(env, corsHeaders) {
     return new Response(JSON.stringify({ success: true, message: 'All verifications cleared' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
+}
+
+// Scan Aadhar card using Gemini Vision API
+async function scanAadharCard(request, env, corsHeaders) {
+    try {
+        const formData = await request.formData();
+        const image = formData.get('image');
+
+        if (!image) {
+            return new Response(JSON.stringify({ error: 'No image provided' }), {
+                status: 400,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        // Convert image to base64
+        const imageBuffer = await image.arrayBuffer();
+        const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+        const mimeType = image.type || 'image/jpeg';
+
+        // Call Gemini API
+        const geminiResponse = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${env.GEMINI_API_KEY}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            {
+                                text: `Extract the 12-digit Aadhar number from this Aadhar card image. 
+                                       Return ONLY the 12-digit number with no spaces, dashes, or other text.
+                                       If no valid Aadhar number is found, return "NOT_FOUND".
+                                       Example valid response: 123456789012`
+                            },
+                            {
+                                inline_data: {
+                                    mime_type: mimeType,
+                                    data: base64Image
+                                }
+                            }
+                        ]
+                    }],
+                    generationConfig: {
+                        temperature: 0.1,
+                        maxOutputTokens: 50
+                    }
+                })
+            }
+        );
+
+        if (!geminiResponse.ok) {
+            const error = await geminiResponse.text();
+            console.error('Gemini API error:', error);
+            return new Response(JSON.stringify({ error: 'OCR service error', details: error }), {
+                status: 500,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+
+        const geminiData = await geminiResponse.json();
+        const extractedText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+
+        // Extract 12-digit number from response
+        const aadharMatch = extractedText.match(/\d{12}/);
+
+        if (aadharMatch) {
+            return new Response(JSON.stringify({
+                success: true,
+                aadhar_number: aadharMatch[0],
+                raw_response: extractedText
+            }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        } else {
+            return new Response(JSON.stringify({
+                success: false,
+                error: 'Could not extract Aadhar number from image',
+                raw_response: extractedText
+            }), {
+                status: 400,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+        }
+    } catch (error) {
+        console.error('Scan error:', error);
+        return new Response(JSON.stringify({ error: 'Failed to process image', details: error.message }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+    }
 }
