@@ -1,12 +1,14 @@
-name = "trustflow-worker"
-main = "cf-worker.js"
+name = "trustflow-api"
+main = "trustflow-worker.js"
 compatibility_date = "2024-01-01"
 
-# Static assets (HTML, CSS, JS, images)
-[assets]
-directory = "./"
-
+# D1 Database binding
 [[d1_databases]]
 binding = "DB"
 database_name = "trustflow-db"
 database_id = "a1f43409-a6ef-4ca8-922f-dbbe9733c781"
+
+# R2 Bucket binding
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "trustflow-images"

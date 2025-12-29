@@ -1,12 +1,9 @@
-// Cloudflare Worker for TrustFlow - Finance Platform with D1 Database
+// Cloudflare Worker for Finance Platform
 // Calculates minimum profit with credit score-based benchmark margins in INR
-// Now includes D1 database for users and verification logs
 
-export default {
-  async fetch(request, env, ctx) {
-    return handleRequest(request, env);
-  }
-};
+addEventListener('fetch', event => {
+  event.respondWith(handleRequest(event.request))
+})
 
 // Define environment variables for Mistral AI API
 const MISTRAL_API_KEY = "YOUR_API_KEY_HERE"; // User provided Mistral AI API key
@@ -97,11 +94,11 @@ async function callMasterAgentAI(loanDetails) {
 }
 
 
-async function handleRequest(request, env) {
+async function handleRequest(request) {
   // Set CORS headers
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Content-Type': 'application/json'
   }
@@ -109,13 +106,6 @@ async function handleRequest(request, env) {
   // Handle CORS preflight
   if (request.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
-  }
-
-  const url = new URL(request.url);
-
-  // Route to D1 API handlers
-  if (url.pathname.startsWith('/api/')) {
-    return handleD1Request(request, env, corsHeaders);
   }
 
   // Handle POST requests
@@ -881,193 +871,4 @@ function calculateEMI(principal, annualInterestRate, timeInMonths) {
   const monthlyInterestRate = (annualInterestRate / 100) / 12;
   const emi = principal * monthlyInterestRate * Math.pow((1 + monthlyInterestRate), timeInMonths) / (Math.pow((1 + monthlyInterestRate), timeInMonths) - 1);
   return emi;
-}
-
-// =============================================
-// D1 Database API Handlers
-// =============================================
-
-async function handleD1Request(request, env, corsHeaders) {
-  const url = new URL(request.url);
-  const path = url.pathname;
-  const method = request.method;
-
-  try {
-    // Users API
-    if (path === '/api/users' && method === 'GET') {
-      return await getUsers(env, corsHeaders);
-    }
-
-    if (path.startsWith('/api/users/') && method === 'GET') {
-      const identifier = path.split('/').pop();
-      return await getUserByIdentifier(env, identifier, corsHeaders);
-    }
-
-    if (path === '/api/users' && method === 'POST') {
-      const data = await request.json();
-      return await createUser(env, data, corsHeaders);
-    }
-
-    // Verification Logs API
-    if (path === '/api/logs' && method === 'GET') {
-      const limit = url.searchParams.get('limit') || 100;
-      return await getLogs(env, parseInt(limit), corsHeaders);
-    }
-
-    if (path === '/api/logs' && method === 'POST') {
-      const data = await request.json();
-      return await createLog(env, data, corsHeaders);
-    }
-
-    if (path === '/api/logs' && method === 'DELETE') {
-      return await clearLogs(env, corsHeaders);
-    }
-
-    // Stats API
-    if (path === '/api/stats' && method === 'GET') {
-      return await getStats(env, corsHeaders);
-    }
-
-    return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
-      status: 404,
-      headers: corsHeaders
-    });
-
-  } catch (error) {
-    return new Response(JSON.stringify({
-      error: 'Database error',
-      details: error.message
-    }), {
-      status: 500,
-      headers: corsHeaders
-    });
-  }
-}
-
-// Get all users
-async function getUsers(env, corsHeaders) {
-  const result = await env.DB.prepare(
-    'SELECT id, name, aadhar_id, phone_number, credit_score, created_at FROM users ORDER BY created_at DESC'
-  ).all();
-
-  return new Response(JSON.stringify(result.results), { headers: corsHeaders });
-}
-
-// Get user by Aadhar or Phone
-async function getUserByIdentifier(env, identifier, corsHeaders) {
-  let user;
-
-  if (identifier.length === 12) {
-    // Aadhar number
-    user = await env.DB.prepare(
-      'SELECT * FROM users WHERE aadhar_id = ?'
-    ).bind(identifier).first();
-  } else if (identifier.length === 10) {
-    // Phone number
-    user = await env.DB.prepare(
-      'SELECT * FROM users WHERE phone_number = ?'
-    ).bind(identifier).first();
-  } else {
-    return new Response(JSON.stringify({ error: 'Invalid identifier. Use 12-digit Aadhar or 10-digit phone.' }), {
-      status: 400,
-      headers: corsHeaders
-    });
-  }
-
-  if (!user) {
-    return new Response(JSON.stringify({ error: 'User not found' }), {
-      status: 404,
-      headers: corsHeaders
-    });
-  }
-
-  return new Response(JSON.stringify(user), { headers: corsHeaders });
-}
-
-// Create new user
-async function createUser(env, data, corsHeaders) {
-  const { name, aadhar_id, phone_number, photo_url, credit_score } = data;
-
-  if (!name || !aadhar_id || !phone_number) {
-    return new Response(JSON.stringify({ error: 'Missing required fields: name, aadhar_id, phone_number' }), {
-      status: 400,
-      headers: corsHeaders
-    });
-  }
-
-  try {
-    const result = await env.DB.prepare(
-      'INSERT INTO users (name, aadhar_id, phone_number, photo_url, credit_score) VALUES (?, ?, ?, ?, ?)'
-    ).bind(name, aadhar_id, phone_number, photo_url || null, credit_score || null).run();
-
-    return new Response(JSON.stringify({
-      success: true,
-      id: result.meta.last_row_id,
-      message: 'User created successfully'
-    }), { headers: corsHeaders });
-  } catch (error) {
-    if (error.message.includes('UNIQUE constraint')) {
-      return new Response(JSON.stringify({ error: 'User with this Aadhar or phone already exists' }), {
-        status: 409,
-        headers: corsHeaders
-      });
-    }
-    throw error;
-  }
-}
-
-// Get verification logs
-async function getLogs(env, limit, corsHeaders) {
-  const result = await env.DB.prepare(
-    'SELECT * FROM verification_logs ORDER BY created_at DESC LIMIT ?'
-  ).bind(limit).all();
-
-  return new Response(JSON.stringify(result.results), { headers: corsHeaders });
-}
-
-// Create verification log
-async function createLog(env, data, corsHeaders) {
-  const { userName, aadhar, phone, status, confidenceScore, identityType } = data;
-
-  // Find user_id if aadhar matches
-  let userId = null;
-  if (aadhar && !aadhar.includes('X')) {
-    const user = await env.DB.prepare('SELECT id FROM users WHERE aadhar_id = ?').bind(aadhar).first();
-    if (user) userId = user.id;
-  }
-
-  await env.DB.prepare(`
-    INSERT INTO verification_logs 
-    (user_id, user_name, aadhar_masked, phone_masked, status, confidence_score, identity_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    userId,
-    userName || 'Unknown',
-    aadhar || 'N/A',
-    phone || 'N/A',
-    status || 'unknown',
-    confidenceScore || null,
-    identityType || 'unknown'
-  ).run();
-
-  return new Response(JSON.stringify({ success: true, message: 'Log created' }), { headers: corsHeaders });
-}
-
-// Clear all logs
-async function clearLogs(env, corsHeaders) {
-  await env.DB.prepare('DELETE FROM verification_logs').run();
-  return new Response(JSON.stringify({ success: true, message: 'All logs cleared' }), { headers: corsHeaders });
-}
-
-// Get verification stats
-async function getStats(env, corsHeaders) {
-  const total = await env.DB.prepare('SELECT COUNT(*) as count FROM verification_logs').first();
-  const success = await env.DB.prepare("SELECT COUNT(*) as count FROM verification_logs WHERE status = 'success'").first();
-  const failed = await env.DB.prepare("SELECT COUNT(*) as count FROM verification_logs WHERE status = 'failed'").first();
-
-  return new Response(JSON.stringify({
-    total: total.count,
-    successful: success.count,
-    failed: failed.count
-  }), { headers: corsHeaders });
 }

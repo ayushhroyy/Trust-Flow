@@ -1,4 +1,6 @@
 const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
+const API_BASE = 'https://trustflow-api.youtopialabs.workers.dev';
+
 let referenceDescriptor;
 let detectionInterval;
 let currentIdentity = null;
@@ -6,6 +8,7 @@ let stream = null;
 let verificationTimeout = null;
 let countdownInterval = null;
 let lastConfidenceScore = null;
+let currentUserData = null;
 
 const referenceImage = document.getElementById('referenceImage');
 const video = document.getElementById('video');
@@ -148,58 +151,73 @@ async function loadReferenceImage() {
     startWebcamButton.disabled = true;
     referenceImage.src = '';
     referenceDescriptor = null;
+    currentUserData = null;
 
-    let userPath = '';
-    if (currentIdentity.type === 'aadhar') {
-        userPath = `userdata/${currentIdentity.value}/img.jpeg`;
-    } else {
-        const users = await getAllUsers();
-        const user = users.find(u => u.phone_number === currentIdentity.value);
+    try {
+        let user = null;
+
+        if (currentIdentity.type === 'aadhar') {
+            const response = await fetch(`${API_BASE}/api/users/${currentIdentity.value}`);
+            if (response.ok) {
+                user = await response.json();
+            }
+        } else {
+            const response = await fetch(`${API_BASE}/api/users/phone/${currentIdentity.value}`);
+            if (response.ok) {
+                user = await response.json();
+            }
+        }
+
         if (!user) {
             statusDiv.innerText = 'User not found in database';
-            alert('No user found with this phone number');
+            alert('No user found with this identity');
             return;
         }
-        userPath = `userdata/${user.adhaar_id || user.aadhar_id}/img.jpeg`;
-    }
 
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = userPath;
+        currentUserData = user;
+        const imageUrl = `${API_BASE}/api/image/${user.image_key}`;
 
-    img.onload = async () => {
-        referenceImage.src = userPath;
-        try {
-            console.log('Detecting face in reference image...');
-            const detection = await faceapi.detectSingleFace(img)
-                .withFaceLandmarks()
-                .withFaceDescriptor();
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = imageUrl;
 
-            if (!detection) {
-                console.warn('No face detected in reference image');
-                statusDiv.innerText = 'No face found in reference image. Ensure image has a clear face.';
+        img.onload = async () => {
+            referenceImage.src = imageUrl;
+            try {
+                console.log('Detecting face in reference image...');
+                const detection = await faceapi.detectSingleFace(img)
+                    .withFaceLandmarks()
+                    .withFaceDescriptor();
+
+                if (!detection) {
+                    console.warn('No face detected in reference image');
+                    statusDiv.innerText = 'No face found in reference image. Ensure image has a clear face.';
+                    referenceDescriptor = null;
+                    startWebcamButton.disabled = true;
+                } else {
+                    console.log('Face detected in reference image');
+                    referenceDescriptor = detection.descriptor;
+                    statusDiv.innerText = 'Reference image loaded! Click "Start Webcam" to verify.';
+                    startWebcamButton.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error detecting face in reference image:', error);
+                statusDiv.innerText = 'Error processing reference image';
                 referenceDescriptor = null;
                 startWebcamButton.disabled = true;
-            } else {
-                console.log('Face detected in reference image');
-                referenceDescriptor = detection.descriptor;
-                statusDiv.innerText = 'Reference image loaded! Click "Start Webcam" to verify.';
-                startWebcamButton.disabled = false;
             }
-        } catch (error) {
-            console.error('Error detecting face in reference image:', error);
-            statusDiv.innerText = 'Error processing reference image';
+        };
+
+        img.onerror = () => {
+            console.error('Failed to load reference image:', imageUrl);
+            statusDiv.innerText = 'Could not load reference image';
             referenceDescriptor = null;
             startWebcamButton.disabled = true;
-        }
-    };
-
-    img.onerror = () => {
-        console.error('Failed to load reference image:', userPath);
-        statusDiv.innerText = 'Could not load reference image';
-        referenceDescriptor = null;
-        startWebcamButton.disabled = true;
-    };
+        };
+    } catch (error) {
+        console.error('Error loading reference image:', error);
+        statusDiv.innerText = 'Error loading user data';
+    }
 }
 
 startWebcamButton.addEventListener('click', async () => {
@@ -411,54 +429,36 @@ video.addEventListener('play', async () => {
 
 async function getAllUsers() {
     try {
-        const response = await fetch('userdata/users_index.json');
+        const response = await fetch(`${API_BASE}/api/users`);
         if (response.ok) {
             return await response.json();
         }
     } catch (error) {
-        console.log('No users index found, using fallback');
+        console.error('Error fetching users from API:', error);
     }
-
-    const users = [];
-    const aadharFolders = ['449961503595', '744708230225'];
-
-    for (const aadhar of aadharFolders) {
-        try {
-            const response = await fetch(`userdata/${aadhar}/details.json`);
-            if (response.ok) {
-                const user = await response.json();
-                users.push(user);
-            }
-        } catch (error) {
-            console.log(`Could not load user: ${aadhar}`);
-        }
-    }
-
-    return users;
+    return [];
 }
 
 async function fetchUserDetails() {
-    let aadharNumber = '';
-
-    if (currentIdentity.type === 'aadhar') {
-        aadharNumber = currentIdentity.value;
-    } else {
-        const users = await getAllUsers();
-        const user = users.find(u => u.phone_number === currentIdentity.value);
-        if (user) {
-            aadharNumber = user.adhaar_id || user.aadhar_id;
-        }
+    // Use cached currentUserData if available
+    if (currentUserData) {
+        return currentUserData;
     }
 
     try {
-        const response = await fetch(`userdata/${aadharNumber}/details.json`);
+        let response;
+        if (currentIdentity.type === 'aadhar') {
+            response = await fetch(`${API_BASE}/api/users/${currentIdentity.value}`);
+        } else {
+            response = await fetch(`${API_BASE}/api/users/phone/${currentIdentity.value}`);
+        }
+
         if (response.ok) {
             return await response.json();
         }
     } catch (error) {
         console.error('Error fetching user details:', error);
     }
-
     return null;
 }
 
@@ -514,34 +514,49 @@ async function addUser() {
 
     const photo = photoInput.files[0];
 
-    const userDetails = {
-        id: Date.now(),
-        name: name,
-        username: `${name.toLowerCase().replace(/\s+/g, '_')}_aadhar`,
-        adhaar_id: aadhar,
-        aadhar_id: aadhar,
-        phone_number: phone
-    };
+    // Show loading state
+    const addButton = document.querySelector('#adminScreen .glow-button');
+    const originalText = addButton.querySelector('span').innerText;
+    addButton.disabled = true;
+    addButton.querySelector('span').innerText = 'Adding...';
 
-    alert(`To add "${name}" to the database:\n\n1. Create folder: userdata/${aadhar}/\n2. Save the photo as: userdata/${aadhar}/img.jpeg\n3. Create file: userdata/${aadhar}/details.json\n\nContent for details.json:\n${JSON.stringify(userDetails, null, 2)}\n\nThis is a static app. For production, use a backend server.`);
+    try {
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('aadhar_id', aadhar);
+        formData.append('phone_number', phone);
+        formData.append('image', photo);
 
-    document.getElementById('adminName').value = '';
-    document.getElementById('adminAadhar').value = '';
-    document.getElementById('adminPhone').value = '';
-    document.getElementById('adminPhoto').value = '';
-    document.getElementById('photoPreview').innerHTML = '';
+        const response = await fetch(`${API_BASE}/api/users`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            alert(`✓ User "${name}" added successfully!`);
+            document.getElementById('adminName').value = '';
+            document.getElementById('adminAadhar').value = '';
+            document.getElementById('adminPhone').value = '';
+            document.getElementById('adminPhoto').value = '';
+            document.getElementById('photoPreview').innerHTML = '';
+        } else {
+            alert(`Error: ${result.error || 'Failed to add user'}`);
+        }
+    } catch (error) {
+        console.error('Error adding user:', error);
+        alert('Network error. Please check your connection and try again.');
+    } finally {
+        addButton.disabled = false;
+        addButton.querySelector('span').innerText = originalText;
+    }
 }
 
 // =============================================
-// Dashboard Functions - D1 Database Integration
+// Dashboard Functions - Login History & Confidence Scores
+// Now uses D1 database via Worker API
 // =============================================
-
-// API base URL - change to your deployed worker URL in production
-const API_BASE_URL = window.location.hostname === 'localhost'
-    ? 'http://localhost:8787'  // Wrangler dev server
-    : '';  // Same origin in production
-
-const STORAGE_KEY = 'trustflow_verification_history'; // Fallback for localStorage
 
 function maskAadhar(aadhar) {
     if (!aadhar || aadhar === 'N/A') return 'N/A';
@@ -559,95 +574,31 @@ function maskPhone(phone) {
     return phone;
 }
 
-// Fetch verification history from D1 API
-async function getVerificationHistoryFromAPI() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/logs?limit=100`);
-        if (response.ok) {
-            return await response.json();
-        }
-    } catch (error) {
-        console.warn('API not available, falling back to localStorage:', error);
-    }
-    // Fallback to localStorage
-    return getVerificationHistoryLocal();
-}
-
-// localStorage fallback
-function getVerificationHistoryLocal() {
-    try {
-        const data = localStorage.getItem(STORAGE_KEY);
-        return data ? JSON.parse(data) : [];
-    } catch (error) {
-        console.error('Error reading verification history:', error);
-        return [];
-    }
-}
-
-function saveVerificationHistoryLocal(history) {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-    } catch (error) {
-        console.error('Error saving verification history:', error);
-    }
-}
-
-// Log verification event to D1 API
 async function logVerificationEvent(userData, success, confidenceScore) {
     const event = {
-        userName: userData.userName || 'Unknown',
-        aadhar: maskAadhar(userData.aadhar),
-        phone: maskPhone(userData.phone),
+        user_name: userData.userName || 'Unknown',
+        aadhar_masked: maskAadhar(userData.aadhar),
+        phone_masked: maskPhone(userData.phone),
         status: success ? 'success' : 'failed',
-        confidenceScore: confidenceScore ? parseFloat(confidenceScore) : null,
-        identityType: userData.identityType || 'unknown'
+        confidence_score: confidenceScore ? parseFloat(confidenceScore) : null,
+        identity_type: userData.identityType || 'unknown'
     };
 
-    // Try API first
     try {
-        const response = await fetch(`${API_BASE_URL}/api/logs`, {
+        const response = await fetch(`${API_BASE}/api/verifications`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(event)
         });
+
         if (response.ok) {
             console.log('Verification event logged to D1:', event);
-            return;
+        } else {
+            console.error('Failed to log verification to D1');
         }
     } catch (error) {
-        console.warn('API not available, saving to localStorage:', error);
+        console.error('Error logging verification:', error);
     }
-
-    // Fallback to localStorage
-    const history = getVerificationHistoryLocal();
-    const localEvent = {
-        id: Date.now(),
-        timestamp: new Date().toISOString(),
-        ...event
-    };
-    history.unshift(localEvent);
-    if (history.length > 100) history.pop();
-    saveVerificationHistoryLocal(history);
-    console.log('Verification event logged to localStorage:', localEvent);
-}
-
-// Get stats from D1 API
-async function getVerificationStatsFromAPI() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/stats`);
-        if (response.ok) {
-            return await response.json();
-        }
-    } catch (error) {
-        console.warn('API not available, calculating from localStorage:', error);
-    }
-    // Fallback
-    const history = getVerificationHistoryLocal();
-    return {
-        total: history.length,
-        successful: history.filter(e => e.status === 'success').length,
-        failed: history.filter(e => e.status === 'failed').length
-    };
 }
 
 function formatTimestamp(isoString) {
@@ -679,73 +630,81 @@ function getConfidenceClass(score) {
 }
 
 async function populateDashboard() {
-    // Show loading state
-    document.getElementById('totalVerifications').textContent = '...';
-    document.getElementById('successCount').textContent = '...';
-    document.getElementById('failedCount').textContent = '...';
-
-    const [stats, history] = await Promise.all([
-        getVerificationStatsFromAPI(),
-        getVerificationHistoryFromAPI()
-    ]);
-
-    // Update stats
-    document.getElementById('totalVerifications').textContent = stats.total;
-    document.getElementById('successCount').textContent = stats.successful;
-    document.getElementById('failedCount').textContent = stats.failed;
-
-    // Update table
     const tableBody = document.getElementById('historyTableBody');
 
-    if (!history || history.length === 0) {
+    // Show loading state
+    tableBody.innerHTML = `
+        <tr class="empty-row">
+            <td colspan="5">Loading verification history...</td>
+        </tr>
+    `;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/verifications`);
+        const history = await response.json();
+
+        // Calculate stats
+        const total = history.length;
+        const successful = history.filter(e => e.status === 'success').length;
+        const failed = history.filter(e => e.status === 'failed').length;
+
+        // Update stats
+        document.getElementById('totalVerifications').textContent = total;
+        document.getElementById('successCount').textContent = successful;
+        document.getElementById('failedCount').textContent = failed;
+
+        if (history.length === 0) {
+            tableBody.innerHTML = `
+                <tr class="empty-row">
+                    <td colspan="5">No verification history yet</td>
+                </tr>
+            `;
+            return;
+        }
+
+        tableBody.innerHTML = history.map(event => {
+            const statusClass = event.status === 'success' ? 'success' : 'failed';
+            const statusText = event.status === 'success' ? 'Success' : 'Failed';
+            const confidenceClass = getConfidenceClass(event.confidence_score);
+            const confidenceText = event.confidence_score !== null ? `${event.confidence_score}%` : 'N/A';
+
+            return `
+                <tr>
+                    <td>${formatTimestamp(event.timestamp)}</td>
+                    <td>${event.user_name || 'Unknown'}</td>
+                    <td>${event.aadhar_masked || 'N/A'}</td>
+                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td><span class="confidence-badge ${confidenceClass}">${confidenceText}</span></td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading verifications:', error);
         tableBody.innerHTML = `
             <tr class="empty-row">
-                <td colspan="5">No verification history yet</td>
+                <td colspan="5">Error loading history. Please try again.</td>
             </tr>
         `;
-        return;
     }
-
-    tableBody.innerHTML = history.map(event => {
-        const statusClass = event.status === 'success' ? 'success' : 'failed';
-        const statusText = event.status === 'success' ? 'Success' : 'Failed';
-        const confidence = event.confidence_score || event.confidenceScore;
-        const confidenceClass = getConfidenceClass(confidence);
-        const confidenceText = confidence !== null && confidence !== undefined ? `${confidence}%` : 'N/A';
-        const timestamp = event.created_at || event.timestamp;
-        const aadhar = event.aadhar_masked || event.aadhar;
-        const userName = event.user_name || event.userName;
-
-        return `
-            <tr>
-                <td>${formatTimestamp(timestamp)}</td>
-                <td>${userName}</td>
-                <td>${aadhar}</td>
-                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                <td><span class="confidence-badge ${confidenceClass}">${confidenceText}</span></td>
-            </tr>
-        `;
-    }).join('');
 }
 
 async function clearLoginHistory() {
     if (confirm('Are you sure you want to clear all verification history? This action cannot be undone.')) {
-        // Try API first
         try {
-            const response = await fetch(`${API_BASE_URL}/api/logs`, { method: 'DELETE' });
+            const response = await fetch(`${API_BASE}/api/verifications`, {
+                method: 'DELETE'
+            });
+
             if (response.ok) {
-                console.log('Verification history cleared from D1');
                 await populateDashboard();
-                return;
+                console.log('Verification history cleared from D1');
+            } else {
+                alert('Failed to clear history');
             }
         } catch (error) {
-            console.warn('API not available, clearing localStorage:', error);
+            console.error('Error clearing history:', error);
+            alert('Network error. Please try again.');
         }
-
-        // Fallback
-        localStorage.removeItem(STORAGE_KEY);
-        await populateDashboard();
-        console.log('Verification history cleared from localStorage');
     }
 }
 
