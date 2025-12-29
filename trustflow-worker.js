@@ -361,48 +361,51 @@ async function scanAadharCard(request, env, corsHeaders) {
         const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
         const mimeType = image.type || 'image/jpeg';
 
-        // Call Gemini API
-        const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${env.GEMINI_API_KEY}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            {
-                                text: `Extract the 12-digit Aadhar number from this Aadhar card image. 
-                                       Return ONLY the 12-digit number with no spaces, dashes, or other text.
-                                       If no valid Aadhar number is found, return "NOT_FOUND".
-                                       Example valid response: 123456789012`
-                            },
-                            {
-                                inline_data: {
-                                    mime_type: mimeType,
-                                    data: base64Image
-                                }
+        // Call OpenRouter API with Gemini model
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://securify.app',
+                'X-Title': 'Securify Aadhar Scanner'
+            },
+            body: JSON.stringify({
+                model: 'google/gemini-2.5-flash-lite-preview-06-2025',
+                messages: [{
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Extract the 12-digit Aadhar number from this Aadhar card image. 
+                                   Return ONLY the 12-digit number with no spaces, dashes, or other text.
+                                   If no valid Aadhar number is found, return "NOT_FOUND".
+                                   Example valid response: 123456789012`
+                        },
+                        {
+                            type: 'image_url',
+                            image_url: {
+                                url: `data:${mimeType};base64,${base64Image}`
                             }
-                        ]
-                    }],
-                    generationConfig: {
-                        temperature: 0.1,
-                        maxOutputTokens: 50
-                    }
-                })
-            }
-        );
+                        }
+                    ]
+                }],
+                max_tokens: 50,
+                temperature: 0.1
+            })
+        });
 
-        if (!geminiResponse.ok) {
-            const error = await geminiResponse.text();
-            console.error('Gemini API error:', error);
+        if (!response.ok) {
+            const error = await response.text();
+            console.error('OpenRouter API error:', error);
             return new Response(JSON.stringify({ error: 'OCR service error', details: error }), {
                 status: 500,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
         }
 
-        const geminiData = await geminiResponse.json();
-        const extractedText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        const data = await response.json();
+        const extractedText = data.choices?.[0]?.message?.content?.trim() || '';
 
         // Extract 12-digit number from response
         const aadharMatch = extractedText.match(/\d{12}/);
