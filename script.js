@@ -814,13 +814,27 @@ async function processAadharCard(input) {
 
         const result = await response.json();
 
-        if (result.success && result.aadhar_number) {
-            document.getElementById('adminAadhar').value = result.aadhar_number;
-            scanStatus.textContent = `✓ Extracted: ${result.aadhar_number}`;
-            scanStatus.className = 'scan-status';
-            closeAadharScanner();
+        if (result.success) {
+            let extractedInfo = [];
+            if (result.aadhar_number) {
+                document.getElementById('adminAadhar').value = result.aadhar_number;
+                extractedInfo.push(`Aadhar: ${result.aadhar_number}`);
+            }
+            if (result.name) {
+                document.getElementById('adminName').value = result.name;
+                extractedInfo.push(`Name: ${result.name}`);
+            }
+
+            if (extractedInfo.length > 0) {
+                scanStatus.textContent = `✓ Extracted: ${extractedInfo.join(', ')}`;
+                scanStatus.className = 'scan-status';
+                setTimeout(() => closeAadharScanner(), 1000);
+            } else {
+                scanStatus.textContent = '✗ No data extracted';
+                scanStatus.className = 'scan-status error';
+            }
         } else {
-            scanStatus.textContent = `✗ ${result.error || 'Could not extract Aadhar'}`;
+            scanStatus.textContent = `✗ ${result.error || 'Could not extract data'}`;
             scanStatus.className = 'scan-status error';
         }
     } catch (error) {

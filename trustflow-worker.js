@@ -384,10 +384,10 @@ async function scanAadharCard(request, env, corsHeaders) {
                     content: [
                         {
                             type: 'text',
-                            text: `Extract the 12-digit Aadhar number from this Aadhar card image. 
-                                   Return ONLY the 12-digit number with no spaces, dashes, or other text.
-                                   If no valid Aadhar number is found, return "NOT_FOUND".
-                                   Example valid response: 123456789012`
+                            text: `Extract the 12-digit Aadhar number and the FULL NAME from this Aadhar card image. 
+                                   Return ONLY a JSON object in this exact format: {"aadhar_number": "123456789012", "name": "JOHN DOE"}.
+                                   If a field is not found, use "NOT_FOUND" as the value.
+                                   Provide only the JSON object, no markdown blocks or other text.`
                         },
                         {
                             type: 'image_url',
@@ -397,7 +397,7 @@ async function scanAadharCard(request, env, corsHeaders) {
                         }
                     ]
                 }],
-                max_tokens: 50,
+                max_tokens: 100,
                 temperature: 0.1
             })
         });
@@ -412,29 +412,50 @@ async function scanAadharCard(request, env, corsHeaders) {
         }
 
         const data = await response.json();
-        const extractedText = data.choices?.[0]?.message?.content?.trim() || '';
+        let extractedText = data.choices?.[0]?.message?.content?.trim() || '';
 
-        // Extract 12-digit number from response
-        const aadharMatch = extractedText.match(/\d{12}/);
+        // Remove markdown code blocks if present
+        extractedText = extractedText.replace(/```json|```/g, '').trim();
 
-        if (aadharMatch) {
-            return new Response(JSON.stringify({
-                success: true,
-                aadhar_number: aadharMatch[0],
-                raw_response: extractedText
-            }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            });
-        } else {
-            return new Response(JSON.stringify({
-                success: false,
-                error: 'Could not extract Aadhar number from image',
-                raw_response: extractedText
-            }), {
-                status: 400,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            });
+        try {
+            const result = JSON.parse(extractedText);
+            const aadhar = result.aadhar_number !== 'NOT_FOUND' ? result.aadhar_number : null;
+            const name = result.name !== 'NOT_FOUND' ? result.name : null;
+
+            if (aadhar || name) {
+                return new Response(JSON.stringify({
+                    success: true,
+                    aadhar_number: aadhar,
+                    name: name,
+                    raw_response: extractedText
+                }), {
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+        } catch (e) {
+            console.error('JSON parse error from Gemini:', extractedText);
+            // Fallback to regex if JSON fails
+            const aadharMatch = extractedText.match(/\d{12}/);
+            if (aadharMatch) {
+                return new Response(JSON.stringify({
+                    success: true,
+                    aadhar_number: aadharMatch[0],
+                    name: null,
+                    raw_response: extractedText
+                }), {
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
         }
+
+        return new Response(JSON.stringify({
+            success: false,
+            error: 'Could not extract valid data from image',
+            raw_response: extractedText
+        }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
     } catch (error) {
         console.error('Scan error:', error);
         return new Response(JSON.stringify({ error: 'Failed to process image', details: error.message }), {
