@@ -56,7 +56,97 @@ function goToVerification() {
 
 function goToAdmin() {
     transitionScreen('welcomeScreen', 'adminScreen');
+    loadUsersList();
 }
+
+function switchAdminTab(tab) {
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.admin-tab-content').forEach(content => content.classList.remove('active'));
+
+    if (tab === 'add') {
+        document.querySelector('.tab-btn:first-child').classList.add('active');
+        document.getElementById('addUserTab').classList.add('active');
+    } else {
+        document.querySelector('.tab-btn:last-child').classList.add('active');
+        document.getElementById('viewUsersTab').classList.add('active');
+        loadUsersList();
+    }
+}
+
+async function loadUsersList() {
+    const container = document.getElementById('usersListContent');
+    container.innerHTML = '<p class="loading-text">Loading users...</p>';
+
+    try {
+        const users = await getAllUsers();
+
+        if (users.length === 0) {
+            container.innerHTML = '<p class="empty-users">No users in database yet</p>';
+            return;
+        }
+
+        container.innerHTML = `
+            <p class="user-count">${users.length} user${users.length !== 1 ? 's' : ''} registered</p>
+            ${users.map(user => `
+                <div class="user-card" data-aadhar="${user.aadhar_id}">
+                    <img class="user-avatar" src="${API_BASE}/api/image/${user.image_key}" alt="${user.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 font-size=%2240%22 text-anchor=%22middle%22 fill=%22%23666%22>👤</text></svg>'">
+                    <div class="user-info">
+                        <div class="user-name">${user.name}</div>
+                        <div class="user-details">
+                            <span class="user-aadhar">XXXX-XXXX-${user.aadhar_id.slice(-4)}</span> · ${user.phone_number.slice(0, 2)}XXXXX${user.phone_number.slice(-3)}
+                        </div>
+                    </div>
+                    <div class="user-actions">
+                        <button class="delete-btn" onclick="deleteUser('${user.aadhar_id}', '${user.name}')">🗑️ Delete</button>
+                    </div>
+                </div>
+            `).join('')}
+        `;
+    } catch (error) {
+        console.error('Error loading users:', error);
+        container.innerHTML = '<p class="empty-users">Error loading users</p>';
+    }
+}
+
+async function deleteUser(aadhar, name) {
+    if (!confirm(`Are you sure you want to delete "${name}"?\n\nThis will remove their data and photo permanently.`)) {
+        return;
+    }
+
+    const card = document.querySelector(`.user-card[data-aadhar="${aadhar}"]`);
+    const deleteBtn = card.querySelector('.delete-btn');
+    deleteBtn.disabled = true;
+    deleteBtn.textContent = 'Deleting...';
+
+    try {
+        const response = await fetch(`${API_BASE}/api/users/${aadhar}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            card.style.opacity = '0';
+            card.style.transform = 'translateX(20px)';
+            setTimeout(() => {
+                loadUsersList();
+            }, 300);
+        } else {
+            const result = await response.json();
+            alert(`Error: ${result.error || 'Failed to delete user'}`);
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = '🗑️ Delete';
+        }
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        alert('Network error. Please try again.');
+        deleteBtn.disabled = false;
+        deleteBtn.textContent = '🗑️ Delete';
+    }
+}
+
+window.switchAdminTab = switchAdminTab;
+window.loadUsersList = loadUsersList;
+window.deleteUser = deleteUser;
 
 function goToDashboard() {
     populateDashboard();
