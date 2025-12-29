@@ -9,4 +9,4 @@ directory = "./"
 [[d1_databases]]
 binding = "DB"
 database_name = "trustflow-db"
-database_id = "REPLACE_WITH_YOUR_DATABASE_ID"
+database_id = "a1f43409-a6ef-4ca8-922f-dbbe9733c781"
