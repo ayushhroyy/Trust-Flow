@@ -910,13 +910,16 @@ function getConfidenceClass(score) {
 }
 
 async function populateDashboard() {
-    const tableBody = document.getElementById('historyTableBody');
+    const historyList = document.getElementById('historyTableBody');
+    const historyCountEl = document.getElementById('historyCount');
+    const successRateEl = document.getElementById('successRate');
 
     // Show loading state
-    tableBody.innerHTML = `
-        <tr class="empty-row">
-            <td colspan="5">Loading verification history...</td>
-        </tr>
+    historyList.innerHTML = `
+        <div class="empty-state">
+            <div class="empty-icon">⏳</div>
+            <p>Loading verification history...</p>
+        </div>
     `;
 
     try {
@@ -927,43 +930,66 @@ async function populateDashboard() {
         const total = history.length;
         const successful = history.filter(e => e.status === 'success').length;
         const failed = history.filter(e => e.status === 'failed').length;
+        const successRate = total > 0 ? Math.round((successful / total) * 100) : 0;
 
         // Update stats
         document.getElementById('totalVerifications').textContent = total;
         document.getElementById('successCount').textContent = successful;
         document.getElementById('failedCount').textContent = failed;
 
+        // Update success rate
+        if (successRateEl) {
+            successRateEl.textContent = total > 0 ? `${successRate}% success` : '--';
+            successRateEl.style.color = successRate >= 70 ? '#10b981' : successRate >= 50 ? '#eab308' : '#ef4444';
+        }
+
+        // Update history count
+        if (historyCountEl) {
+            historyCountEl.textContent = `${total} record${total !== 1 ? 's' : ''}`;
+        }
+
         if (history.length === 0) {
-            tableBody.innerHTML = `
-                <tr class="empty-row">
-                    <td colspan="5">No verification history yet</td>
-                </tr>
+            historyList.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📭</div>
+                    <p>No verification history yet</p>
+                    <span class="empty-hint">Verifications will appear here</span>
+                </div>
             `;
             return;
         }
 
-        tableBody.innerHTML = history.map(event => {
+        historyList.innerHTML = history.map(event => {
             const statusClass = event.status === 'success' ? 'success' : 'failed';
-            const statusText = event.status === 'success' ? 'Success' : 'Failed';
+            const statusIcon = event.status === 'success' ? '✓' : '✗';
             const confidenceClass = getConfidenceClass(event.confidence_score);
             const confidenceText = event.confidence_score !== null ? `${event.confidence_score}%` : 'N/A';
 
             return `
-                <tr>
-                    <td>${formatTimestamp(event.timestamp)}</td>
-                    <td>${event.user_name || 'Unknown'}</td>
-                    <td>${event.aadhar_masked || 'N/A'}</td>
-                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                    <td><span class="confidence-badge ${confidenceClass}">${confidenceText}</span></td>
-                </tr>
+                <div class="history-item">
+                    <div class="history-avatar ${statusClass}">${statusIcon}</div>
+                    <div class="history-info">
+                        <div class="history-name">${event.user_name || 'Unknown'}</div>
+                        <div class="history-meta">
+                            <span class="history-aadhar">${event.aadhar_masked || 'N/A'}</span>
+                            <span class="history-time">· ${formatTimestamp(event.timestamp)}</span>
+                        </div>
+                    </div>
+                    <div class="history-right">
+                        <div class="history-confidence ${confidenceClass}">${confidenceText}</div>
+                        <div class="history-status ${statusClass}">${event.status}</div>
+                    </div>
+                </div>
             `;
         }).join('');
     } catch (error) {
         console.error('Error loading verifications:', error);
-        tableBody.innerHTML = `
-            <tr class="empty-row">
-                <td colspan="5">Error loading history. Please try again.</td>
-            </tr>
+        historyList.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">⚠️</div>
+                <p>Error loading history</p>
+                <span class="empty-hint">Please try again</span>
+            </div>
         `;
     }
 }

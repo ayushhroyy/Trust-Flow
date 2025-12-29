@@ -254,57 +254,70 @@
         <!-- Dashboard Screen -->
         <div class="screen" id="dashboardScreen">
             <div class="glass-card dashboard-card">
-                <h2 class="screen-title">Verification Dashboard</h2>
-                <p class="subtext">Login history and confidence scores</p>
+                <div class="dashboard-header">
+                    <div class="dashboard-title-section">
+                        <h2 class="screen-title">📊 Analytics Dashboard</h2>
+                        <p class="subtext">Real-time verification insights</p>
+                    </div>
+                    <button class="refresh-btn" onclick="populateDashboard()">🔄 Refresh</button>
+                </div>
 
                 <!-- Stats Cards -->
                 <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon">📋</div>
+                    <div class="stat-card total">
+                        <div class="stat-header">
+                            <div class="stat-icon-wrapper total">
+                                <span class="stat-icon">📋</span>
+                            </div>
+                            <div class="stat-trend" id="successRate">--</div>
+                        </div>
                         <div class="stat-value" id="totalVerifications">0</div>
                         <div class="stat-label">Total Verifications</div>
                     </div>
                     <div class="stat-card success">
-                        <div class="stat-icon">✓</div>
+                        <div class="stat-header">
+                            <div class="stat-icon-wrapper success">
+                                <span class="stat-icon">✓</span>
+                            </div>
+                        </div>
                         <div class="stat-value" id="successCount">0</div>
                         <div class="stat-label">Successful</div>
+                        <div class="stat-bar success"></div>
                     </div>
                     <div class="stat-card failed">
-                        <div class="stat-icon">✗</div>
+                        <div class="stat-header">
+                            <div class="stat-icon-wrapper failed">
+                                <span class="stat-icon">✗</span>
+                            </div>
+                        </div>
                         <div class="stat-value" id="failedCount">0</div>
                         <div class="stat-label">Failed</div>
+                        <div class="stat-bar failed"></div>
                     </div>
                 </div>
 
-                <!-- Login History Table -->
-                <div class="table-container">
-                    <h3 class="table-title">Recent Verifications</h3>
-                    <div class="table-wrapper">
-                        <table class="history-table">
-                            <thead>
-                                <tr>
-                                    <th>Date/Time</th>
-                                    <th>User</th>
-                                    <th>Aadhar</th>
-                                    <th>Status</th>
-                                    <th>Confidence</th>
-                                </tr>
-                            </thead>
-                            <tbody id="historyTableBody">
-                                <tr class="empty-row">
-                                    <td colspan="5">No verification history yet</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                <!-- History Section -->
+                <div class="history-section">
+                    <div class="section-header">
+                        <h3 class="section-title">📜 Recent Activity</h3>
+                        <span class="history-count" id="historyCount">0 records</span>
+                    </div>
+
+                    <div class="history-list" id="historyTableBody">
+                        <div class="empty-state">
+                            <div class="empty-icon">📭</div>
+                            <p>No verification history yet</p>
+                            <span class="empty-hint">Verifications will appear here</span>
+                        </div>
                     </div>
                 </div>
 
                 <div class="dashboard-actions">
                     <button class="danger-button" onclick="clearLoginHistory()">
-                        <span>🗑️ Clear History</span>
+                        <span>🗑️ Clear All</span>
                     </button>
                     <button class="back-button" onclick="goBack('dashboardScreen', 'welcomeScreen')">
-                        <span>Back to Home</span>
+                        <span>← Back to Home</span>
                     </button>
                 </div>
             </div>
