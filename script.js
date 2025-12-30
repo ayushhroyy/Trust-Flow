@@ -127,17 +127,29 @@ async function loadUsersList() {
                 <div class="user-card" data-aadhar="${user.aadhar_id}">
                     <img class="user-avatar" src="${API_BASE}/api/image/${user.image_key}" alt="${user.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 font-size=%2240%22 text-anchor=%22middle%22 fill=%22%23666%22>👤</text></svg>'">
                     <div class="user-info">
-                        <div class="user-name">${user.name}</div>
-                        <div class="user-details">
-                            <span class="user-aadhar">XXXX-XXXX-${user.aadhar_id.slice(-4)}</span> · ${user.phone_number.slice(0, 2)}XXXXX${user.phone_number.slice(-3)}
+                        <div class="user-header">
+                            <div class="user-name">${user.name}</div>
+                            <div class="trust-badge ${getTrustScoreClass(user.trustScore)}">${user.trustScore}%</div>
                         </div>
-                        <div class="trust-score-section">
-                            <div class="trust-score-label">Trust Score</div>
-                            <div class="trust-score-value ${getTrustScoreClass(user.trustScore)}">${user.trustScore}%</div>
+                        <div class="user-details">
+                            <span class="user-aadhar">XXXX-XXXX-${user.aadhar_id.slice(-4)}</span> · ${user.phone_number ? user.phone_number.slice(0, 2) + 'XXXXX' + user.phone_number.slice(-3) : 'No phone'}
+                        </div>
+                        <div class="trust-bar-container">
+                            <div class="trust-bar-fill ${getTrustScoreClass(user.trustScore)}" style="width: ${user.trustScore}%"></div>
                         </div>
                         <div class="verification-stats">
-                            <span class="stat-success">✓ ${user.successfulVerifications}</span>
-                            <span class="stat-failed">✗ ${user.failedVerifications}</span>
+                            <div class="stat-item stat-success">
+                                <span class="stat-icon">✓</span>
+                                <span class="stat-count">${user.successfulVerifications}</span>
+                            </div>
+                            <div class="stat-item stat-failed">
+                                <span class="stat-icon">✗</span>
+                                <span class="stat-count">${user.failedVerifications}</span>
+                            </div>
+                            <div class="stat-item stat-total">
+                                <span class="stat-icon">📊</span>
+                                <span class="stat-count">${user.totalVerifications}</span>
+                            </div>
                         </div>
                     </div>
                     <div class="user-actions">
