@@ -267,7 +267,7 @@
                     <div class="scanner-content">
                         <h3>📷 Scan Aadhar Card</h3>
                         <p class="subtext">Upload or capture an image of the Aadhar card</p>
-                        
+
                         <div class="photo-options">
                             <label class="photo-option">
                                 <input type="radio" name="aadharPhotoSource" value="upload" checked
@@ -280,27 +280,33 @@
                                 <span>📸 Capture Photo</span>
                             </label>
                         </div>
-                        
+
                         <div id="uploadAadharSection">
                             <input type="file" id="aadharCardInput" accept="image/*"
                                 onchange="processAadharCard(this)">
                         </div>
-                        
+
                         <div id="webcamAadharSection" style="display: none;">
-                            <div id="aadharWebcamWrapper">
-                                <video id="aadharVideo" autoplay muted playsinline></video>
+                            <div class="aadhar-webcam-container">
+                                <div class="webcam-preview-frame">
+                                    <video id="aadharVideo" autoplay muted playsinline></video>
+                                    <div class="webcam-corner-tl"></div>
+                                    <div class="webcam-corner-tr"></div>
+                                    <div class="webcam-corner-bl"></div>
+                                    <div class="webcam-corner-br"></div>
+                                </div>
+                                <button class="capture-button" onclick="captureAadharWebcamPhoto()">
+                                    <span>📸 Capture Photo</span>
+                                </button>
                             </div>
-                            <button class="secondary-button capture-btn" onclick="captureAadharWebcamPhoto()">
-                                <span>📸 Capture</span>
-                            </button>
                         </div>
-                        
+
                         <div id="scanPreview" class="scan-preview"></div>
                         <div id="scanningIndicator" class="scanning-indicator" style="display: none;">
                             <div class="spinner"></div>
                             <span>Extracting details...</span>
                         </div>
-                        
+
                         <button class="back-button" onclick="closeAadharScanner()">
                             <span>Cancel</span>
                         </button>
