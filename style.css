@@ -1225,6 +1225,56 @@ body {
     cursor: not-allowed;
 }
 
+/* Trust Score Section */
+.trust-score-section {
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+}
+
+.trust-score-label {
+    font-size: 10px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.trust-score-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.trust-score-value.high {
+    color: #10b981;
+}
+
+.trust-score-value.medium {
+    color: #eab308;
+}
+
+.trust-score-value.low {
+    color: #ef4444;
+}
+
+.verification-stats {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.stat-success {
+    font-size: 11px;
+    color: #10b981;
+}
+
+.stat-failed {
+    font-size: 11px;
+    color: #ef4444;
+}
+
 .loading-text {
     text-align: center;
     color: #666;

@@ -89,6 +89,32 @@ async function loadUsersList() {
 
     try {
         const users = await getAllUsers();
+        const verifications = await getVerificationHistory();
+
+        // Calculate trust score for each user
+        const usersWithTrustScore = users.map(user => {
+            const userVerifications = verifications.filter(v =>
+                v.aadhar_masked === user.aadhar_id || v.aadhar === user.aadhar_id
+            );
+
+            const successful = userVerifications.filter(v => v.status === 'success').length;
+            const failed = userVerifications.filter(v => v.status === 'failed').length;
+            const total = successful + failed;
+
+            // Calculate trust score: start at 50, add 5 per success, subtract 10 per failure
+            let trustScore = 50 + (successful * 5) - (failed * 10);
+
+            // Keep score between 0 and 100
+            trustScore = Math.max(0, Math.min(100, trustScore));
+
+            return {
+                ...user,
+                trustScore,
+                successfulVerifications: successful,
+                failedVerifications: failed,
+                totalVerifications: total
+            };
+        });
 
         if (users.length === 0) {
             container.innerHTML = '<p class="empty-users">No users in database yet</p>';
@@ -97,13 +123,21 @@ async function loadUsersList() {
 
         container.innerHTML = `
             <p class="user-count">${users.length} user${users.length !== 1 ? 's' : ''} registered</p>
-            ${users.map(user => `
+            ${usersWithTrustScore.map(user => `
                 <div class="user-card" data-aadhar="${user.aadhar_id}">
                     <img class="user-avatar" src="${API_BASE}/api/image/${user.image_key}" alt="${user.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 font-size=%2240%22 text-anchor=%22middle%22 fill=%22%23666%22>👤</text></svg>'">
                     <div class="user-info">
                         <div class="user-name">${user.name}</div>
                         <div class="user-details">
                             <span class="user-aadhar">XXXX-XXXX-${user.aadhar_id.slice(-4)}</span> · ${user.phone_number.slice(0, 2)}XXXXX${user.phone_number.slice(-3)}
+                        </div>
+                        <div class="trust-score-section">
+                            <div class="trust-score-label">Trust Score</div>
+                            <div class="trust-score-value ${getTrustScoreClass(user.trustScore)}">${user.trustScore}%</div>
+                        </div>
+                        <div class="verification-stats">
+                            <span class="stat-success">✓ ${user.successfulVerifications}</span>
+                            <span class="stat-failed">✗ ${user.failedVerifications}</span>
                         </div>
                     </div>
                     <div class="user-actions">
@@ -115,6 +149,25 @@ async function loadUsersList() {
     } catch (error) {
         console.error('Error loading users:', error);
         container.innerHTML = '<p class="empty-users">Error loading users</p>';
+    }
+}
+
+function getTrustScoreClass(score) {
+    if (score >= 70) return 'high';
+    if (score >= 50) return 'medium';
+    return 'low';
+}
+
+async function getVerificationHistory() {
+    try {
+        const response = await fetch(`${API_BASE}/api/verifications`);
+        if (response.ok) {
+            return await response.json();
+        }
+        return [];
+    } catch (error) {
+        console.error('Error fetching verification history:', error);
+        return [];
     }
 }
 
