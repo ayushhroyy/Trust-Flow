@@ -1465,11 +1465,35 @@ function renderHistoryList(history) {
         return;
     }
 
+    // Calculate trust scores for each user
+    const userTrustScores = {};
+    history.forEach(event => {
+        const key = event.aadhar_masked || event.aadhar || 'unknown';
+        if (!userTrustScores[key]) {
+            userTrustScores[key] = { success: 0, failed: 0 };
+        }
+        if (event.status === 'success') {
+            userTrustScores[key].success++;
+        } else {
+            userTrustScores[key].failed++;
+        }
+    });
+
+    // Calculate percentage trust score for each user
+    const getTrustScore = (aadhar) => {
+        const data = userTrustScores[aadhar] || { success: 0, failed: 0 };
+        const total = data.success + data.failed;
+        if (total === 0) return 100;
+        return Math.round((data.success / total) * 100);
+    };
+
     historyList.innerHTML = history.map(event => {
         const statusClass = event.status === 'success' ? 'success' : 'failed';
         const statusIcon = event.status === 'success' ? '✓' : '✗';
         const confidenceClass = getConfidenceClass(event.confidence_score);
         const confidenceText = event.confidence_score !== null ? `${event.confidence_score}%` : 'N/A';
+        const trustScore = getTrustScore(event.aadhar_masked);
+        const trustClass = trustScore >= 70 ? 'high' : trustScore >= 50 ? 'medium' : 'low';
 
         return `
             <div class="history-item">
@@ -1479,6 +1503,13 @@ function renderHistoryList(history) {
                     <div class="history-meta">
                         <span class="history-aadhar">${event.aadhar_masked || 'N/A'}</span>
                         <span class="history-time">· ${formatTimestamp(event.timestamp)}</span>
+                    </div>
+                    <div class="history-trust-bar">
+                        <div class="trust-label">Trust Score</div>
+                        <div class="trust-track">
+                            <div class="trust-fill ${trustClass}" style="width: ${trustScore}%"></div>
+                        </div>
+                        <div class="trust-percent ${trustClass}">${trustScore}%</div>
                     </div>
                 </div>
                 <div class="history-right">
