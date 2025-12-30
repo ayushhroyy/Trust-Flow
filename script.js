@@ -396,11 +396,14 @@ function goToAdmin() {
 window.goToAdminAuth = goToAdminAuth;
 window.startAdminVerification = startAdminVerification;
 window.cancelAdminAuth = cancelAdminAuth;
+window.goToVerification = goToVerification;
 
 function goToDashboard() {
     populateDashboard();
     transitionScreen('welcomeScreen', 'dashboardScreen');
 }
+
+window.goToDashboard = goToDashboard;
 
 function goBack(fromScreen, toScreen) {
     stopWebcam();
@@ -1102,7 +1105,6 @@ function proceedAadharExtraction() {
     const imageToProcess = aadharCapturedPhotoBlob || previewImg.src;
 
     processAadharImage(imageToProcess);
-}
 }
 
 async function processAadharImage(imageData) {
