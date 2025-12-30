@@ -1073,46 +1073,36 @@ function retakeAadharPhoto() {
     startAadharWebcam();
 }
 
-async function processAadharCard(input) {
+function handleAadharImageSelect(input) {
     const file = input.files[0];
-    if (!file) {
-        // Check if photo was captured via webcam
-        if (aadharCapturedPhotoBlob) {
-            // Use captured blob
-            await processAadharImage(aadharCapturedPhotoBlob);
-            closeAadharScanner();
-        } else {
-            // Regular file upload
-            if (!file) return;
+    if (!file) return;
 
-            const scanPreview = document.getElementById('scanPreview');
-            const scanningIndicator = document.getElementById('scanningIndicator');
-            const scanStatus = document.getElementById('scanStatus');
+    const scanPreview = document.getElementById('scanPreview');
+    const scanningIndicator = document.getElementById('scanningIndicator');
+    const scanStatus = document.getElementById('scanStatus');
 
-            // Show preview
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                scanPreview.innerHTML = `<img src="${e.target.result}" alt="Aadhar card">`;
-            };
-            reader.readAsDataURL(file);
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        scanPreview.innerHTML = `<img src="${e.target.result}" alt="Aadhar card">`;
+    };
+    reader.readAsDataURL(file);
+}
 
-            // Show scanning indicator
-            scanningIndicator.style.display = 'flex';
+function proceedAadharExtraction() {
+    const scanPreview = document.getElementById('scanPreview');
+    const previewImg = scanPreview.querySelector('img');
 
-            try {
-                await processAadharImage(file);
-            } catch (error) {
-                console.error('Scan error:', error);
-                scanStatus.textContent = '✗ Scan failed. Try again.';
-                scanStatus.className = 'scan-status error';
-            } finally {
-                scanningIndicator.style.display = 'none';
-                input.value = '';
-                // Reset Aadhar webcam state
-                aadharCapturedPhotoBlob = null;
-            }
-        }
+    if (!previewImg || !aadharCapturedPhotoBlob) {
+        alert('Please upload or capture a photo first');
+        return;
     }
+
+    // Determine which image to use
+    const imageToProcess = aadharCapturedPhotoBlob || previewImg.src;
+
+    processAadharImage(imageToProcess);
+}
 }
 
 async function processAadharImage(imageData) {

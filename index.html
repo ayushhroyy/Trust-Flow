@@ -283,7 +283,10 @@
 
                         <div id="uploadAadharSection">
                             <input type="file" id="aadharCardInput" accept="image/*"
-                                onchange="processAadharCard(this)">
+                                onchange="handleAadharImageSelect(this)">
+                            <button class="extract-btn" onclick="proceedAadharExtraction()">
+                                <span>Proceed to Extract Info</span>
+                            </button>
                         </div>
 
                         <div id="webcamAadharSection" style="display: none;">
