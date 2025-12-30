@@ -993,6 +993,7 @@ function retakePhoto() {
 window.openAadharScanner = openAadharScanner;
 window.closeAadharScanner = closeAadharScanner;
 window.processAadharCard = processAadharCard;
+window.proceedAadharExtraction = proceedAadharExtraction;
 
 // Aadhar Scanner Webcam Functions
 let aadharWebcamStream = null;
@@ -1055,9 +1056,14 @@ function captureAadharWebcamPhoto() {
         const webcamSection = document.getElementById('webcamAadharSection');
         webcamSection.innerHTML = `
             <p style="color: #10b981; text-align: center;">✓ Photo captured!</p>
-            <button class="secondary-button" onclick="retakeAadharPhoto()">
-                <span>🔄 Retake</span>
-            </button>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button class="secondary-button" onclick="retakeAadharPhoto()">
+                    <span>🔄 Retake</span>
+                </button>
+                <button class="glow-button" onclick="processCapturedAadharPhoto()">
+                    <span>✓ Proceed to Extract</span>
+                </button>
+            </div>
         `;
     }, 'image/jpeg', 0.9);
 }
@@ -1075,6 +1081,16 @@ function retakeAadharPhoto() {
     `;
     startAadharWebcam();
 }
+
+function processCapturedAadharPhoto() {
+    if (!aadharCapturedPhotoBlob) {
+        alert('No photo captured');
+        return;
+    }
+    processAadharImage(aadharCapturedPhotoBlob);
+}
+
+window.processCapturedAadharPhoto = processCapturedAadharPhoto;
 
 function handleAadharImageSelect(input) {
     const file = input.files[0];
