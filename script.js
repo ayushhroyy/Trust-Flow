@@ -171,6 +171,10 @@ async function getVerificationHistory() {
     }
 }
 
+window.getTrustScoreClass = getTrustScoreClass;
+window.getVerificationHistory = getVerificationHistory;
+
+
 async function deleteUser(aadhar, name) {
     if (!confirm(`Are you sure you want to delete "${name}"?\n\nThis will remove their data and photo permanently.`)) {
         return;
