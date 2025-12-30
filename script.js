@@ -1491,36 +1491,4 @@ async function clearLoginHistory() {
     }
 }
 
-    // Expose dashboard functions to global scope for onclick handlers
-    window.goToDashboard = goToDashboard;
-    window.clearLoginHistory = clearLoginHistory;
-    window.populateDashboard = populateDashboard;
-    window.filterDashboard = filterDashboard;
-}
 
-// Expose admin authentication functions
-window.goToAdminAuth = goToAdminAuth;
-window.startAdminVerification = startAdminVerification;
-window.loadAdminReferenceImage = loadAdminReferenceImage;
-
-// Expose admin tab functions
-window.switchAdminTab = switchAdminTab;
-
-// Expose user photo webcam functions
-window.togglePhotoSource = togglePhotoSource;
-window.startAddUserWebcam = startAddUserWebcam;
-window.stopAddUserWebcam = stopAddUserWebcam;
-window.captureWebcamPhoto = captureWebcamPhoto;
-window.retakePhoto = retakePhoto;
-
-// Expose Aadhar scanner functions
-window.toggleAadharPhotoSource = toggleAadharPhotoSource;
-window.startAadharWebcam = startAadharWebcam;
-window.stopAadharWebcam = stopAadharWebcam;
-window.captureAadharWebcamPhoto = captureAadharWebcamPhoto;
-window.retakeAadharPhoto = retakeAadharPhoto;
-window.openAadharScanner = openAadharScanner;
-window.closeAadharScanner = closeAadharScanner;
-window.handleAadharImageSelect = handleAadharImageSelect;
-window.proceedAadharExtraction = proceedAadharExtraction;
-window.processAadharCard = processAadharCard;
