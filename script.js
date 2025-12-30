@@ -668,6 +668,10 @@ video.addEventListener('play', async () => {
 
                 if (consecutiveMatches >= requiredMatches) {
                     clearTimeoutCountdown();
+                    if (verificationTimeout) {
+                        clearTimeout(verificationTimeout);
+                        verificationTimeout = null;
+                    }
                     stopWebcam();
                     clearInterval(detectionInterval);
                     startWebcamButton.querySelector('span').innerText = 'Verified';
