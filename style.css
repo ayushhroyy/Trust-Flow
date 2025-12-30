@@ -1374,10 +1374,7 @@ body {
 }
 
 .scanner-options {
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-    margin: 20px 0;
+    display: none;
 }
 
 .scan-preview {

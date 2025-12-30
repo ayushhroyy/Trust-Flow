@@ -787,6 +787,9 @@ function openAadharScanner() {
 
 function closeAadharScanner() {
     document.getElementById('aadharScannerModal').style.display = 'none';
+    // Reset Aadhar webcam state
+    stopAadharWebcam();
+    aadharCapturedPhotoBlob = null;
 }
 
 async function processAadharCard(input) {
@@ -930,6 +933,182 @@ function retakePhoto() {
 window.openAadharScanner = openAadharScanner;
 window.closeAadharScanner = closeAadharScanner;
 window.processAadharCard = processAadharCard;
+
+// Aadhar Scanner Webcam Functions
+let aadharWebcamStream = null;
+let aadharCapturedPhotoBlob = null;
+
+function toggleAadharPhotoSource(source) {
+    const uploadSection = document.getElementById('uploadAadharSection');
+    const webcamSection = document.getElementById('webcamAadharSection');
+    const preview = document.getElementById('scanPreview');
+
+    if (source === 'upload') {
+        uploadSection.style.display = 'block';
+        webcamSection.style.display = 'none';
+        stopAadharWebcam();
+        aadharCapturedPhotoBlob = null;
+    } else {
+        uploadSection.style.display = 'none';
+        webcamSection.style.display = 'block';
+        startAadharWebcam();
+    }
+    preview.innerHTML = '';
+}
+
+async function startAadharWebcam() {
+    try {
+        aadharWebcamStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+        });
+        const video = document.getElementById('aadharVideo');
+        video.srcObject = aadharWebcamStream;
+    } catch (err) {
+        console.error('Aadhar webcam error:', err);
+        alert('Could not access webcam');
+        document.querySelector('input[name="aadharPhotoSource"][value="upload"]').checked = true;
+        toggleAadharPhotoSource('upload');
+    }
+}
+
+function stopAadharWebcam() {
+    if (aadharWebcamStream) {
+        aadharWebcamStream.getTracks().forEach(track => track.stop());
+        aadharWebcamStream = null;
+    }
+}
+
+function captureAadharWebcamPhoto() {
+    const video = document.getElementById('aadharVideo');
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+
+    canvas.toBlob((blob) => {
+        aadharCapturedPhotoBlob = blob;
+        const url = URL.createObjectURL(blob);
+        document.getElementById('scanPreview').innerHTML = `<img src="${url}" alt="Captured Aadhar card">`;
+        stopAadharWebcam();
+
+        // Update scanner content
+        const webcamSection = document.getElementById('webcamAadharSection');
+        webcamSection.innerHTML = `
+            <p style="color: #10b981; text-align: center;">✓ Photo captured!</p>
+            <button class="secondary-button" onclick="retakeAadharPhoto()">
+                <span>🔄 Retake</span>
+            </button>
+        `;
+    }, 'image/jpeg', 0.9);
+}
+
+function retakeAadharPhoto() {
+    aadharCapturedPhotoBlob = null;
+    document.getElementById('scanPreview').innerHTML = '';
+    document.getElementById('webcamAadharSection').innerHTML = `
+        <div id="aadharWebcamWrapper">
+            <video id="aadharVideo" autoplay muted playsinline></video>
+        </div>
+        <button class="secondary-button capture-btn" onclick="captureAadharWebcamPhoto()">
+            <span>📸 Capture</span>
+        </button>
+    `;
+    startAadharWebcam();
+}
+
+async function processAadharCard(input) {
+    const file = input.files[0];
+    if (!file) {
+        // Check if photo was captured via webcam
+        if (aadharCapturedPhotoBlob) {
+            // Use captured blob
+            await processAadharImage(aadharCapturedPhotoBlob);
+            closeAadharScanner();
+        } else {
+            // Regular file upload
+            if (!file) return;
+
+            const scanPreview = document.getElementById('scanPreview');
+            const scanningIndicator = document.getElementById('scanningIndicator');
+            const scanStatus = document.getElementById('scanStatus');
+
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                scanPreview.innerHTML = `<img src="${e.target.result}" alt="Aadhar card">`;
+            };
+            reader.readAsDataURL(file);
+
+            // Show scanning indicator
+            scanningIndicator.style.display = 'flex';
+
+            try {
+                await processAadharImage(file);
+            } catch (error) {
+                console.error('Scan error:', error);
+                scanStatus.textContent = '✗ Scan failed. Try again.';
+                scanStatus.className = 'scan-status error';
+            } finally {
+                scanningIndicator.style.display = 'none';
+                input.value = '';
+                // Reset Aadhar webcam state
+                aadharCapturedPhotoBlob = null;
+            }
+        }
+    }
+}
+
+async function processAadharImage(imageData) {
+    const scanStatus = document.getElementById('scanStatus');
+    const scanningIndicator = document.getElementById('scanningIndicator');
+
+    scanningIndicator.style.display = 'flex';
+
+    try {
+        const formData = new FormData();
+        if (imageData instanceof Blob) {
+            formData.append('image', imageData, 'aadhar_card.jpg');
+        } else {
+            formData.append('image', imageData);
+        }
+
+        const response = await fetch(`${API_BASE}/api/scan-aadhar`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        console.log('Scan result from server:', result);
+
+        if (result.success && result.aadhar_number) {
+            document.getElementById('adminAadhar').value = result.aadhar_number;
+
+            if (result.name) {
+                document.getElementById('adminName').value = result.name;
+                scanStatus.textContent = `✓ Extracted: ${result.name} | ${result.aadhar_number}`;
+            } else {
+                scanStatus.textContent = `✓ Extracted Aadhar: ${result.aadhar_number}`;
+            }
+            scanStatus.className = 'scan-status';
+            closeAadharScanner();
+        } else {
+            console.error('Scan failed with details:', result);
+            scanStatus.textContent = `✗ ${result.error || 'Could not extract Aadhar'}`;
+            if (result.extracted_aadhar || result.extracted_name) {
+                scanStatus.textContent += ` (Found: ${result.extracted_name || 'N/A'}, ${result.extracted_aadhar || 'N/A'})`;
+            }
+            scanStatus.className = 'scan-status error';
+        }
+    } catch (error) {
+        console.error('Scan error:', error);
+        scanStatus.textContent = '✗ Scan failed. Try again.';
+        scanStatus.className = 'scan-status error';
+    } finally {
+        scanningIndicator.style.display = 'none';
+    }
+}
+
 window.togglePhotoSource = togglePhotoSource;
 window.captureWebcamPhoto = captureWebcamPhoto;
 window.retakePhoto = retakePhoto;
@@ -939,7 +1118,8 @@ async function addUser() {
     const aadhar = document.getElementById('adminAadhar').value.trim();
     const phone = document.getElementById('adminPhone').value.trim();
     const photoInput = document.getElementById('adminPhoto');
-    const photoSource = document.querySelector('input[name="photoSource"]:checked')?.value || 'upload';
+    const facePhotoSource = document.querySelector('input[name="photoSource"]:checked')?.value || 'upload';
+    const aadharPhotoSource = document.querySelector('input[name="aadharPhotoSource"]:checked')?.value || 'upload';
 
     if (!name || !aadhar) {
         alert('Please fill in Name and Aadhar number');
@@ -957,20 +1137,36 @@ async function addUser() {
         return;
     }
 
-    // Get photo based on source
-    let photo;
-    if (photoSource === 'webcam') {
+    // Get face photo based on source
+    let facePhoto;
+    if (facePhotoSource === 'webcam') {
         if (!capturedPhotoBlob) {
-            alert('Please capture a photo');
+            alert('Please capture a face photo');
             return;
         }
-        photo = capturedPhotoBlob;
+        facePhoto = capturedPhotoBlob;
     } else {
         if (!photoInput.files || photoInput.files.length === 0) {
-            alert('Please upload a photo');
+            alert('Please upload a face photo');
             return;
         }
-        photo = photoInput.files[0];
+        facePhoto = photoInput.files[0];
+    }
+
+    // Get Aadhar photo based on source
+    let aadharPhoto = null;
+    if (aadharPhotoSource === 'webcam') {
+        if (!aadharCapturedPhotoBlob) {
+            alert('Please capture Aadhar card photo');
+            return;
+        }
+        aadharPhoto = aadharCapturedPhotoBlob;
+    } else {
+        if (!photoInput.files || photoInput.files.length === 0) {
+            alert('Please upload Aadhar card photo');
+            return;
+        }
+        aadharPhoto = photoInput.files[0];
     }
 
     // Show loading state
@@ -984,8 +1180,12 @@ async function addUser() {
         formData.append('name', name);
         formData.append('aadhar_id', aadhar);
         if (phone) formData.append('phone_number', phone);
-        formData.append('image', photo);
+        formData.append('image', facePhoto);
 
+        // If Aadhar photo was captured separately, append it too
+        if (aadharPhoto && aadharPhotoSource === 'webcam') {
+            formData.append('aadhar_card', aadharPhoto);
+        }
         const response = await fetch(`${API_BASE}/api/users`, {
             method: 'POST',
             body: formData
