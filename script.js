@@ -1184,7 +1184,6 @@ async function addUser() {
     const phone = document.getElementById('adminPhone').value.trim();
     const photoInput = document.getElementById('adminPhoto');
     const facePhotoSource = document.querySelector('input[name="photoSource"]:checked')?.value || 'upload';
-    const aadharPhotoSource = document.querySelector('input[name="aadharPhotoSource"]:checked')?.value || 'upload';
 
     if (!name || !aadhar) {
         alert('Please fill in Name and Aadhar number');
@@ -1218,20 +1217,10 @@ async function addUser() {
         facePhoto = photoInput.files[0];
     }
 
-    // Get Aadhar photo based on source
+    // Get Aadhar card photo if captured via scanner (optional)
     let aadharPhoto = null;
-    if (aadharPhotoSource === 'webcam') {
-        if (!aadharCapturedPhotoBlob) {
-            alert('Please capture Aadhar card photo');
-            return;
-        }
+    if (aadharCapturedPhotoBlob) {
         aadharPhoto = aadharCapturedPhotoBlob;
-    } else {
-        if (!photoInput.files || photoInput.files.length === 0) {
-            alert('Please upload Aadhar card photo');
-            return;
-        }
-        aadharPhoto = photoInput.files[0];
     }
 
     // Show loading state
@@ -1247,8 +1236,8 @@ async function addUser() {
         if (phone) formData.append('phone_number', phone);
         formData.append('image', facePhoto);
 
-        // If Aadhar photo was captured separately, append it too
-        if (aadharPhoto && aadharPhotoSource === 'webcam') {
+        // If Aadhar card photo was captured via scanner, append it too
+        if (aadharPhoto) {
             formData.append('aadhar_card', aadharPhoto);
         }
         const response = await fetch(`${API_BASE}/api/users`, {
@@ -1267,6 +1256,7 @@ async function addUser() {
             document.getElementById('photoPreview').innerHTML = '';
             document.getElementById('scanStatus').textContent = '';
             capturedPhotoBlob = null;
+            aadharCapturedPhotoBlob = null;
 
             // Reset photo source to upload
             document.querySelector('input[name="photoSource"][value="upload"]').checked = true;
